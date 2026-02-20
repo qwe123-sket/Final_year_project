@@ -1,0 +1,8 @@
+-- =============================================
+-- 可选：初始化数据（执行前请先执行 schema.sql）
+-- =============================================
+-- 如需预置管理员账号，取消下方注释并修改密码（此处为 BCrypt 加密后的 "admin123"）。
+-- 生产环境务必修改为强密码并更换此哈希值。
+--
+-- INSERT INTO `sys_user` (`username`, `password`, `role`, `status`, `created_at`, `updated_at`)
+-- VALUES ('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVKIUi', 'ADMIN', 'NORMAL', NOW(6), NOW(6));
