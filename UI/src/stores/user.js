@@ -8,13 +8,12 @@ const USER_KEY = 'note_user'
 
 export const useUserStore = defineStore('user', () => {
   const token = ref(localStorage.getItem(TOKEN_KEY) || '')
-  const userInfo = ref(
-    JSON.parse(localStorage.getItem(USER_KEY) || 'null')
-  )
+  const userInfo = ref(JSON.parse(localStorage.getItem(USER_KEY) || 'null'))
 
   const isLogin = computed(() => !!token.value)
   const isAdmin = computed(() => userInfo.value?.role === 'ADMIN')
 
+  // 同步 token 和用户信息到 localStorage
   function setAuth(t, u) {
     token.value = t
     userInfo.value = u
@@ -27,8 +26,8 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  async function login(data) {
-    const res = await apiLogin(data)
+  async function login(formData) {
+    const res = await apiLogin(formData)
     setAuth(res.token, {
       userId: res.userId,
       username: res.username,
@@ -37,8 +36,8 @@ export const useUserStore = defineStore('user', () => {
     return res
   }
 
-  async function register(data) {
-    const res = await apiRegister(data)
+  async function register(formData) {
+    const res = await apiRegister(formData)
     setAuth(res.token, {
       userId: res.userId,
       username: res.username,
@@ -47,9 +46,10 @@ export const useUserStore = defineStore('user', () => {
     return res
   }
 
+  // 拉取完整的用户资料并合并到 store
   async function fetchProfile() {
-    const p = await getProfile()
-    userInfo.value = { ...userInfo.value, ...p }
+    const profile = await getProfile()
+    userInfo.value = { ...userInfo.value, ...profile }
     localStorage.setItem(USER_KEY, JSON.stringify(userInfo.value))
     return userInfo.value
   }
@@ -58,15 +58,5 @@ export const useUserStore = defineStore('user', () => {
     setAuth('', null)
   }
 
-  return {
-    token,
-    userInfo,
-    isLogin,
-    isAdmin,
-    login,
-    register,
-    fetchProfile,
-    logout,
-    setAuth,
-  }
+  return { token, userInfo, isLogin, isAdmin, login, register, fetchProfile, logout, setAuth }
 })

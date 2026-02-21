@@ -125,22 +125,26 @@ const latestTotal = ref(0)
 
 const keyword = computed(() => route.query.keyword || '')
 
+// 截取摘要文本
 function excerpt(text) {
   if (!text || typeof text !== 'string') return ''
-  const t = text.replace(/\s+/g, ' ').trim()
-  return t.length > 100 ? t.slice(0, 100) + '…' : t
+  const cleaned = text.replace(/\s+/g, ' ').trim()
+  return cleaned.length > 100 ? cleaned.slice(0, 100) + '…' : cleaned
 }
 
-function formatCount(v) {
-  const n = Number(v) || 0
-  if (n >= 10000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + 'w'
-  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
-  return String(n)
+// 数字格式化（万 / 千）
+function formatCount(val) {
+  const num = Number(val) || 0
+  if (num >= 10000) return (num / 10000).toFixed(1).replace(/\.0$/, '') + 'w'
+  if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
+  return String(num)
 }
 
+// 用笔记 ID 生成渐变色，让每张卡片颜色不一样
 function coverStyle(n) {
-  const id = n.noteId ?? n.id
-  const hue = (Number(id) * 137.508) % 360
+  const noteId = n.noteId ?? n.id
+  // 黄金角 137.5° 保证颜色分布均匀
+  const hue = (Number(noteId) * 137.508) % 360
   return {
     background: `linear-gradient(135deg, hsl(${hue}, 45%, 88%) 0%, hsl(${hue}, 35%, 78%) 100%)`,
   }
@@ -149,7 +153,11 @@ function coverStyle(n) {
 async function loadRecommend() {
   recommendLoading.value = true
   try {
-    recommendList.value = await getRecommendList({ page: 0, size: 12 })
+    const data = await getRecommendList({ page: 0, size: 12 })
+    recommendList.value = data
+  } catch (e) {
+    // console.error('loadRecommend failed:', e)
+    recommendList.value = []
   } finally {
     recommendLoading.value = false
   }
@@ -158,10 +166,13 @@ async function loadRecommend() {
 async function loadLatest() {
   latestLoading.value = true
   try {
-    const params = { page: latestPage.value - 1, size: 12 }
-    const res = keyword.value
-      ? await searchNotes({ ...params, keyword: keyword.value })
-      : await listNotes(params)
+    const pageIdx = latestPage.value - 1
+    let res
+    if (keyword.value) {
+      res = await searchNotes({ page: pageIdx, size: 12, keyword: keyword.value })
+    } else {
+      res = await listNotes({ page: pageIdx, size: 12 })
+    }
     latestList.value = res.list || []
     latestTotal.value = res.total || 0
   } finally {
@@ -173,8 +184,8 @@ function goNote(id) {
   router.push('/note/' + id)
 }
 
-watch(activeTab, (v) => {
-  if (v === 'recommend') loadRecommend()
+watch(activeTab, (tab) => {
+  if (tab === 'recommend') loadRecommend()
   else loadLatest()
 })
 
@@ -185,6 +196,7 @@ watch(() => route.query.keyword, () => {
 
 onMounted(() => {
   loadRecommend()
+  // 如果 URL 带了搜索关键词就自动切到 Latest 标签
   if (keyword.value) activeTab.value = 'latest'
   loadLatest()
 })

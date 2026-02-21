@@ -8,6 +8,7 @@ const request = axios.create({
   timeout: 15000,
 })
 
+// 请求拦截 —— 自动带上 token
 request.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem(TOKEN_KEY)
@@ -17,31 +18,33 @@ request.interceptors.request.use(
   (err) => Promise.reject(err)
 )
 
-function extractMessage(err) {
+// 从各种格式的错误响应中提取 message
+function extractMsg(err) {
   const data = err.response?.data
   if (data?.message) return data.message
   if (typeof data === 'string') {
     try {
-      const o = JSON.parse(data)
-      if (o?.message) return o.message
-    } catch (_) {}
+      const parsed = JSON.parse(data)
+      if (parsed?.message) return parsed.message
+    } catch (_) { /* 不是 JSON，忽略 */ }
   }
   return null
 }
 
+// 响应拦截
 request.interceptors.response.use(
   (res) => {
     const { code, message, data } = res.data
     if (code === 200) return data
-    const displayMsg = message || 'Something went wrong. Please try again.'
-    ElMessage.error(displayMsg)
-    return Promise.reject(new Error(displayMsg))
+
+    ElMessage.error(message || 'Something went wrong')
+    return Promise.reject(new Error(message))
   },
   (err) => {
     const status = err.response?.status
-    const serverMsg = extractMessage(err)
+    const serverMsg = extractMsg(err)
 
-    // 401/403: show friendly message and redirect to login, do not expose status code
+    // 401/403 —— 登录态过期或无权限
     if (status === 401 || status === 403) {
       localStorage.removeItem(TOKEN_KEY)
       ElNotification({
@@ -51,25 +54,28 @@ request.interceptors.response.use(
           ? serverMsg
           : status === 401
             ? 'Your session has expired. Please sign in again.'
-            : "You don't have permission to view this. Please sign in.",
+            : "You don't have permission. Please sign in.",
         duration: 3000,
         position: 'top-right',
       })
-      if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
+      // 避免在登录页反复跳转
+      const path = window.location.pathname
+      if (!path.startsWith('/login') && !path.startsWith('/register')) {
         window.location.href = '/login'
       }
       return Promise.reject(err)
     }
 
-    // 429
     if (status === 429) {
-      ElMessage.warning('Too many attempts. Please try again later.')
+      ElMessage.warning('Too many attempts, please try later')
       return Promise.reject(err)
     }
 
-    // Other errors: prefer server message, avoid exposing "Request failed with status code xxx"
-    const fallback = 'Something went wrong. Please try again later.'
-    const msg = serverMsg && !serverMsg.toLowerCase().includes('status code') ? serverMsg : fallback
+    // 其他错误
+    const fallback = 'Something went wrong, please try again later.'
+    const msg = serverMsg && !serverMsg.toLowerCase().includes('status code')
+      ? serverMsg
+      : fallback
     ElMessage.error(msg)
     return Promise.reject(err)
   }
