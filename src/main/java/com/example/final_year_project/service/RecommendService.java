@@ -2,19 +2,29 @@ package com.example.final_year_project.service;
 
 import com.example.final_year_project.dto.recommend.RecommendItemVO;
 import com.example.final_year_project.entity.Note;
+import com.example.final_year_project.entity.NoteTag;
+import com.example.final_year_project.entity.Tag;
+import com.example.final_year_project.entity.User;
 import com.example.final_year_project.entity.enums.NoteStatus;
 import com.example.final_year_project.repository.NoteRepository;
+import com.example.final_year_project.repository.NoteTagRepository;
+import com.example.final_year_project.repository.TagRepository;
 import com.example.final_year_project.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 推荐模块：预留接口，算法由外部实现后对接。
- * 当前返回空列表或按时间倒序的已通过笔记作为占位。
+ * 推荐服务 —— 目前只做数据组装层，实际推荐算法由组内另一位同学负责实现。
+ *
+ * 对接方式：
+ * 1) 算法模块产出一组 noteId -> 调用 getRecommendListByNoteIds
+ * 2) 如果算法还能给出分数 -> 调用 getRecommendListByNoteIdsWithScores
+ * 3) 默认的 getRecommendList 是 fallback，按发布时间倒序返回
  */
 @Service
 @RequiredArgsConstructor
@@ -22,35 +32,108 @@ public class RecommendService {
 
     private final NoteRepository noteRepository;
     private final UserRepository userRepository;
-    private final NoteCacheService noteCacheService;
+    private final NoteCacheService cacheService;
+    private final NoteLikeService likeService;
+    private final NoteTagRepository noteTagRepo;
+    private final TagRepository tagRepo;
+
+    // 内容摘要截取长度
+    private static final int SUMMARY_LEN = 200;
 
     /**
-     * 获取当前用户的个性化推荐列表。
-     * 算法侧完成后可改为：调用算法服务获取 noteId 列表，再组装 VO。
+     * 默认推荐列表 —— fallback 实现。
+     * 等算法对接好了替换这里的逻辑就行。
      */
     public List<RecommendItemVO> getRecommendList(Long userId, int page, int size) {
-        // 占位：返回最近通过的笔记，算法接口对接后替换为算法返回的 ID 列表
-        List<Note> notes = noteRepository.findByStatus(NoteStatus.APPROVED,
-                org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt")))
+        // FIXME: userId 目前没用到，接入算法后需要拿来做个性化
+        var notes = noteRepository.findByStatus(NoteStatus.APPROVED,
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")))
                 .getContent();
-        return notes.stream().map(this::toRecommendVO).collect(Collectors.toList());
+        return buildBatchVO(notes);
     }
 
     /**
-     * 根据笔记 ID 列表组装推荐项（供算法侧返回 ID 后调用）
+     * 根据算法给出的笔记 ID 列表，组装前端需要的 VO。
+     * 保持输入顺序。
      */
     public List<RecommendItemVO> getRecommendListByNoteIds(List<Long> noteIds) {
         if (noteIds == null || noteIds.isEmpty()) return Collections.emptyList();
+
         List<Note> notes = noteRepository.findByIdInAndApproved(noteIds);
-        return notes.stream().map(this::toRecommendVO).collect(Collectors.toList());
+        // 按传入的 id 顺序排列
+        Map<Long, Note> map = notes.stream().collect(Collectors.toMap(Note::getId, n -> n));
+        var ordered = noteIds.stream().map(map::get).filter(Objects::nonNull).toList();
+        return buildBatchVO(ordered);
     }
 
-    private RecommendItemVO toRecommendVO(Note n) {
-        RecommendItemVO vo = new RecommendItemVO();
-        vo.setNoteId(n.getId());
-        vo.setTitle(n.getTitle());
-        vo.setViewCount(noteCacheService.getViewCount(n.getId()));
-        userRepository.findById(n.getUserId()).ifPresent(u -> vo.setAuthorName(u.getNickname() != null ? u.getNickname() : u.getUsername()));
-        return vo;
+    /**
+     * 带分数的推荐结果组装，按 score 降序排列。
+     * 算法那边如果能输出每个笔记的推荐分数，就调这个方法。
+     */
+    public List<RecommendItemVO> getRecommendListByNoteIdsWithScores(Map<Long, Double> scoreMap) {
+        if (scoreMap == null || scoreMap.isEmpty()) return Collections.emptyList();
+
+        List<Note> notes = noteRepository.findByIdInAndApproved(new ArrayList<>(scoreMap.keySet()));
+        // 按分数降序
+        notes.sort((a, b) -> Double.compare(
+                scoreMap.getOrDefault(b.getId(), 0.0),
+                scoreMap.getOrDefault(a.getId(), 0.0)));
+
+        List<RecommendItemVO> voList = buildBatchVO(notes);
+        // 把分数填进去
+        for (var vo : voList) {
+            vo.setScore(scoreMap.getOrDefault(vo.getNoteId(), 0.0));
+        }
+        return voList;
+    }
+
+    // ---------- 内部方法 ----------
+
+    private List<RecommendItemVO> buildBatchVO(List<Note> notes) {
+        if (notes.isEmpty()) return Collections.emptyList();
+
+        var noteIds = notes.stream().map(Note::getId).toList();
+        Set<Long> authorIds = notes.stream().map(Note::getUserId).collect(Collectors.toSet());
+
+        // 一次查出所有作者
+        Map<Long, User> userMap = userRepository.findAllById(authorIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+        Map<Long, Long> likeCountMap = likeService.getLikeCounts(noteIds);
+        Map<Long, List<String>> tagsMap = loadTagsBatch(noteIds);
+
+        return notes.stream().map(n -> {
+            var vo = new RecommendItemVO();
+            vo.setNoteId(n.getId());
+            vo.setTitle(n.getTitle());
+            // 内容截取前 200 字做摘要
+            String content = n.getContent();
+            if (content != null && content.length() > SUMMARY_LEN) {
+                content = content.substring(0, SUMMARY_LEN) + "...";
+            }
+            vo.setContent(content);
+            vo.setViewCount(cacheService.getViewCount(n.getId()));
+            vo.setLikeCount(likeCountMap.getOrDefault(n.getId(), 0L));
+            vo.setTags(tagsMap.getOrDefault(n.getId(), Collections.emptyList()));
+
+            User author = userMap.get(n.getUserId());
+            if (author != null) {
+                vo.setAuthorName(author.getNickname() != null ? author.getNickname() : author.getUsername());
+            }
+            return vo;
+        }).toList();
+    }
+
+    private Map<Long, List<String>> loadTagsBatch(List<Long> noteIds) {
+        var noteTags = noteTagRepo.findByNoteIdIn(noteIds);
+        if (noteTags.isEmpty()) return Collections.emptyMap();
+
+        Set<Long> tagIds = noteTags.stream().map(NoteTag::getTagId).collect(Collectors.toSet());
+        Map<Long, String> nameMap = tagRepo.findByIdIn(new ArrayList<>(tagIds)).stream()
+                .collect(Collectors.toMap(Tag::getId, Tag::getName));
+
+        return noteTags.stream().collect(Collectors.groupingBy(
+                NoteTag::getNoteId,
+                Collectors.mapping(nt -> nameMap.getOrDefault(nt.getTagId(), ""), Collectors.toList())
+        ));
     }
 }

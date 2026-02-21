@@ -16,15 +16,12 @@ public class RecommendController {
 
     private final RecommendService recommendService;
 
-    /**
-     * 个性化推荐列表（算法接口预留，当前为占位实现）
-     */
+    // 未登录用户也能看推荐列表（此时 userId 传 0 走 fallback 逻辑）
     @GetMapping("/list")
     public Result<List<RecommendItemVO>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        Long userId = CurrentUser.getUserIdOrNull();
-        List<RecommendItemVO> list = recommendService.getRecommendList(userId != null ? userId : 0L, page, size);
-        return Result.ok(list);
+        Long uid = CurrentUser.getUserIdOrNull();
+        return Result.ok(recommendService.getRecommendList(uid != null ? uid : 0L, page, size));
     }
 }
