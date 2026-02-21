@@ -16,7 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,9 +27,12 @@ public class ReplyService {
 
     @Transactional
     public ReplyVO create(Long userId, Long noteId, ReplyCreateRequest req) {
-        if (noteRepository.findById(noteId).map(n -> n.getStatus() != NoteStatus.APPROVED).orElse(true)) {
-            throw new BusinessException("Note not found or not approved; cannot reply");
+        // 只能评论已过审的笔记
+        var note = noteRepository.findById(noteId);
+        if (note.isEmpty() || note.get().getStatus() != NoteStatus.APPROVED) {
+            throw new BusinessException("Cannot reply to this note");
         }
+
         Reply reply = Reply.builder()
                 .noteId(noteId)
                 .userId(userId)
@@ -40,10 +42,11 @@ public class ReplyService {
         return toVO(reply);
     }
 
+    // TODO: 后续可以做评论的分页加载和嵌套回复
     public List<ReplyVO> listByNote(Long noteId, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        List<Reply> list = replyRepository.findByNoteIdOrderByCreatedAtDesc(noteId, pageable).getContent();
-        return list.stream().map(this::toVO).collect(Collectors.toList());
+        Pageable pg = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        var replies = replyRepository.findByNoteIdOrderByCreatedAtDesc(noteId, pg).getContent();
+        return replies.stream().map(this::toVO).toList();
     }
 
     private ReplyVO toVO(Reply r) {
@@ -53,7 +56,9 @@ public class ReplyService {
         vo.setUserId(r.getUserId());
         vo.setContent(r.getContent());
         vo.setCreatedAt(r.getCreatedAt());
-        userRepository.findById(r.getUserId()).ifPresent(u -> vo.setUsername(u.getNickname() != null ? u.getNickname() : u.getUsername()));
+        // 拿昵称，没设置昵称就用用户名
+        userRepository.findById(r.getUserId()).ifPresent(u ->
+                vo.setUsername(u.getNickname() != null ? u.getNickname() : u.getUsername()));
         return vo;
     }
 }

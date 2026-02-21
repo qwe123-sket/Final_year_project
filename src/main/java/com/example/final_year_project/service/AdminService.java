@@ -11,20 +11,17 @@ import com.example.final_year_project.entity.enums.UserStatus;
 import com.example.final_year_project.exception.BusinessException;
 import com.example.final_year_project.repository.NoteRepository;
 import com.example.final_year_project.repository.UserRepository;
+import com.example.final_year_project.common.PageRequest;
+import com.example.final_year_project.common.Result;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
-/**
- * 后台管理：笔记审核、用户状态管理
- */
 @Service
 @RequiredArgsConstructor
 public class AdminService {
@@ -35,23 +32,24 @@ public class AdminService {
 
     @Transactional
     public NoteVO auditNote(Long noteId, NoteAuditRequest req) {
-        Note note = noteRepository.findById(noteId).orElseThrow(() -> new BusinessException("Note not found"));
+        Note note = noteRepository.findById(noteId)
+                .orElseThrow(() -> new BusinessException("Note not found"));
         note.setStatus(req.getStatus());
         note.setRejectReason(req.getStatus() == NoteStatus.REJECTED ? req.getRejectReason() : null);
         note = noteRepository.save(note);
         noteCacheService.evictNote(noteId);
-        return toNoteVO(note);
+        return buildNoteVO(note);
     }
 
-    public com.example.final_year_project.common.Result.PageData<NoteVO> listPendingNotes(int page, int size) {
-        int safeSize = com.example.final_year_project.common.PageRequest.clampSize(size);
-        Pageable pageable = PageRequest.of(page, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Note> p = noteRepository.findByStatus(NoteStatus.PENDING, pageable);
-        List<NoteVO> list = p.getContent().stream().map(this::toNoteVO).collect(Collectors.toList());
-        return com.example.final_year_project.common.Result.PageData.of(list, p.getTotalElements(), page, safeSize);
+    public Result.PageData<NoteVO> listPendingNotes(int page, int size) {
+        int safeSize = PageRequest.clampSize(size);
+        Pageable pg = org.springframework.data.domain.PageRequest.of(
+                page, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Note> p = noteRepository.findByStatus(NoteStatus.PENDING, pg);
+        List<NoteVO> list = p.getContent().stream().map(this::buildNoteVO).toList();
+        return Result.PageData.of(list, p.getTotalElements(), page, safeSize);
     }
 
-    /** 管理后台统计数据 */
     public AdminStats getStats() {
         AdminStats s = new AdminStats();
         s.setUserCount(userRepository.count());
@@ -63,27 +61,32 @@ public class AdminService {
 
     @Transactional
     public void updateUserStatus(Long targetUserId, UserStatusRequest req) {
-        User user = userRepository.findById(targetUserId).orElseThrow(() -> new BusinessException("User not found"));
+        User user = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new BusinessException("User not found"));
         user.setStatus(req.getStatus());
         userRepository.save(user);
     }
 
     @Transactional
     public void updateUserRole(Long targetUserId, com.example.final_year_project.entity.enums.UserRole role) {
-        User user = userRepository.findById(targetUserId).orElseThrow(() -> new BusinessException("User not found"));
+        var user = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new BusinessException("User not found"));
         user.setRole(role);
         userRepository.save(user);
     }
 
-    public com.example.final_year_project.common.Result.PageData<AdminUserVO> listUsers(int page, int size, UserStatus statusFilter) {
-        int safeSize = com.example.final_year_project.common.PageRequest.clampSize(size);
-        Pageable pageable = PageRequest.of(page, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+    public Result.PageData<AdminUserVO> listUsers(int page, int size, UserStatus statusFilter) {
+        int safeSize = PageRequest.clampSize(size);
+        Pageable pg = org.springframework.data.domain.PageRequest.of(
+                page, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<User> p = statusFilter != null
-                ? userRepository.findByStatus(statusFilter, pageable)
-                : userRepository.findAll(pageable);
-        List<AdminUserVO> list = p.getContent().stream().map(this::toAdminUserVO).collect(Collectors.toList());
-        return com.example.final_year_project.common.Result.PageData.of(list, p.getTotalElements(), page, safeSize);
+                ? userRepository.findByStatus(statusFilter, pg)
+                : userRepository.findAll(pg);
+        List<AdminUserVO> list = p.getContent().stream().map(this::buildAdminUserVO).toList();
+        return Result.PageData.of(list, p.getTotalElements(), page, safeSize);
     }
+
+    // ---------- 内部类 & 转换 ----------
 
     @lombok.Data
     public static class AdminStats {
@@ -93,7 +96,7 @@ public class AdminService {
         private long approvedNoteCount;
     }
 
-    private NoteVO toNoteVO(Note n) {
+    private NoteVO buildNoteVO(Note n) {
         NoteVO vo = new NoteVO();
         vo.setId(n.getId());
         vo.setUserId(n.getUserId());
@@ -104,11 +107,12 @@ public class AdminService {
         vo.setViewCount(noteCacheService.getViewCount(n.getId()));
         vo.setCreatedAt(n.getCreatedAt());
         vo.setUpdatedAt(n.getUpdatedAt());
-        userRepository.findById(n.getUserId()).ifPresent(u -> vo.setAuthorName(u.getNickname() != null ? u.getNickname() : u.getUsername()));
+        userRepository.findById(n.getUserId()).ifPresent(u ->
+                vo.setAuthorName(u.getNickname() != null ? u.getNickname() : u.getUsername()));
         return vo;
     }
 
-    private AdminUserVO toAdminUserVO(User u) {
+    private AdminUserVO buildAdminUserVO(User u) {
         AdminUserVO vo = new AdminUserVO();
         vo.setId(u.getId());
         vo.setUsername(u.getUsername());

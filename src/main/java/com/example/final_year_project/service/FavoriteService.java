@@ -30,14 +30,14 @@ public class FavoriteService {
 
     @Transactional
     public void add(Long userId, Long noteId) {
-        if (noteRepository.findById(noteId).map(n -> n.getStatus() != NoteStatus.APPROVED).orElse(true)) {
+        var noteOpt = noteRepository.findById(noteId);
+        if (noteOpt.isEmpty() || noteOpt.get().getStatus() != NoteStatus.APPROVED) {
             throw new BusinessException("Note not found or not approved");
         }
         if (favoriteRepository.existsByUserIdAndNoteId(userId, noteId)) {
-            throw new BusinessException("Already favorited this note");
+            throw new BusinessException("Already in your favorites");
         }
-        Favorite f = Favorite.builder().userId(userId).noteId(noteId).build();
-        favoriteRepository.save(f);
+        favoriteRepository.save(Favorite.builder().userId(userId).noteId(noteId).build());
     }
 
     @Transactional
@@ -49,24 +49,31 @@ public class FavoriteService {
         return userId != null && favoriteRepository.existsByUserIdAndNoteId(userId, noteId);
     }
 
-    public com.example.final_year_project.common.Result.PageData<NoteVO> listMyFavorites(Long userId, int page, int size) {
+    public com.example.final_year_project.common.Result.PageData<NoteVO> listMyFavorites(
+            Long userId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        var p = favoriteRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable);
-        List<Long> noteIds = p.getContent().stream().map(Favorite::getNoteId).toList();
+        var favPage = favoriteRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable);
+
+        List<Long> noteIds = favPage.getContent().stream().map(Favorite::getNoteId).toList();
         if (noteIds.isEmpty()) {
             return com.example.final_year_project.common.Result.PageData.of(List.of(), 0, page, size);
         }
-        List<Note> notes = noteRepository.findAllById(noteIds);
-        Map<Long, Note> noteMap = notes.stream().collect(Collectors.toMap(Note::getId, n -> n));
-        List<NoteVO> list = p.getContent().stream()
+
+        // 批量查笔记
+        Map<Long, Note> noteMap = noteRepository.findAllById(noteIds).stream()
+                .collect(Collectors.toMap(Note::getId, n -> n));
+
+        List<NoteVO> voList = favPage.getContent().stream()
                 .map(f -> noteMap.get(f.getNoteId()))
                 .filter(n -> n != null && n.getStatus() == NoteStatus.APPROVED)
-                .map(n -> toNoteVO(n, true))
+                .map(n -> buildNoteVO(n, true))
                 .toList();
-        return com.example.final_year_project.common.Result.PageData.of(list, p.getTotalElements(), page, size);
+
+        return com.example.final_year_project.common.Result.PageData.of(
+                voList, favPage.getTotalElements(), page, size);
     }
 
-    private NoteVO toNoteVO(Note n, boolean favorited) {
+    private NoteVO buildNoteVO(Note n, boolean isFavorited) {
         NoteVO vo = new NoteVO();
         vo.setId(n.getId());
         vo.setUserId(n.getUserId());
@@ -74,10 +81,11 @@ public class FavoriteService {
         vo.setContent(n.getContent());
         vo.setStatus(n.getStatus());
         vo.setViewCount(noteCacheService.getViewCount(n.getId()));
+        vo.setFavorited(isFavorited);
         vo.setCreatedAt(n.getCreatedAt());
         vo.setUpdatedAt(n.getUpdatedAt());
-        vo.setFavorited(favorited);
-        userRepository.findById(n.getUserId()).ifPresent(u -> vo.setAuthorName(u.getNickname() != null ? u.getNickname() : u.getUsername()));
+        userRepository.findById(n.getUserId()).ifPresent(u ->
+                vo.setAuthorName(u.getNickname() != null ? u.getNickname() : u.getUsername()));
         return vo;
     }
 }

@@ -26,20 +26,25 @@ public class AuthService {
     @Value("${app.admin-register-secret:}")
     private String adminRegisterSecret;
 
+    // TODO: 后续可以加邮箱验证功能
     @Transactional
     public LoginResponse register(RegisterRequest req) {
         if (userRepository.existsByUsername(req.getUsername())) {
             throw new BusinessException("Username already exists");
         }
-        if (req.getEmail() != null && !req.getEmail().isBlank() && userRepository.existsByEmail(req.getEmail())) {
+        if (req.getEmail() != null && !req.getEmail().isBlank()
+                && userRepository.existsByEmail(req.getEmail())) {
             throw new BusinessException("Email already registered");
         }
+
+        // 判断是否用管理员密钥注册
         UserRole role = UserRole.USER;
         if (req.getAdminSecret() != null && !req.getAdminSecret().isBlank()
                 && adminRegisterSecret != null && !adminRegisterSecret.isBlank()
                 && req.getAdminSecret().equals(adminRegisterSecret)) {
             role = UserRole.ADMIN;
         }
+
         User user = User.builder()
                 .username(req.getUsername())
                 .password(passwordEncoder.encode(req.getPassword()))
@@ -48,23 +53,28 @@ public class AuthService {
                 .role(role)
                 .build();
         user = userRepository.save(user);
+
         String token = jwtUtil.generateToken(user.getId(), user.getUsername(), user.getRole().name());
         return new LoginResponse(token, user.getId(), user.getUsername(), user.getRole().name());
     }
 
     public LoginResponse login(LoginRequest req) {
         User user = userRepository.findByUsername(req.getUsername())
-                .orElseThrow(() -> new BusinessException(401, "用户名或密码错误"));
+                .orElseThrow(() -> new BusinessException(401, "Invalid username or password"));
+
         if (!passwordEncoder.matches(req.getPassword(), user.getPassword())) {
             throw new BusinessException(401, "Invalid username or password");
         }
+
+        // 检查账号状态
         LoginUser loginUser = new LoginUser(user);
         if (!loginUser.isAccountNonLocked()) {
-            throw new BusinessException(403, "Account has been disabled or banned");
+            throw new BusinessException(403, "Your account has been disabled");
         }
         if (!loginUser.isEnabled()) {
-            throw new BusinessException(403, "Account status is abnormal");
+            throw new BusinessException(403, "Account status abnormal, please contact admin");
         }
+
         String token = jwtUtil.generateToken(user.getId(), user.getUsername(), user.getRole().name());
         return new LoginResponse(token, user.getId(), user.getUsername(), user.getRole().name());
     }
