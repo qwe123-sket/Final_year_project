@@ -4,6 +4,7 @@ import com.example.final_year_project.entity.enums.NoteStatus;
 import lombok.Data;
 
 import java.time.Instant;
+import java.util.List;
 
 @Data
 public class NoteVO {
@@ -16,8 +17,10 @@ public class NoteVO {
     private NoteStatus status;
     private String rejectReason;
     private Long viewCount;
+    private Long likeCount;
+    private Boolean liked;
+    private Boolean favorited;
+    private List<String> tags;
     private Instant createdAt;
     private Instant updatedAt;
-    /** 当前用户是否已收藏 */
-    private Boolean favorited;
 }
