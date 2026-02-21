@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.List;
 
 public interface NoteRepository extends JpaRepository<Note, Long> {
@@ -23,7 +24,15 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
 
     long countByStatus(NoteStatus status);
 
-    /** 供推荐模块：根据 ID 列表按顺序返回 */
     @Query("SELECT n FROM Note n WHERE n.id IN :ids AND n.status = 'APPROVED'")
     List<Note> findByIdInAndApproved(@Param("ids") List<Long> ids);
+
+    @Query("SELECT n FROM Note n WHERE n.status = 'APPROVED' AND n.createdAt > :since")
+    List<Note> findApprovedSince(@Param("since") Instant since);
+
+    @Query("SELECT n FROM Note n WHERE n.status = 'APPROVED' AND n.id NOT IN :excludeIds ORDER BY n.viewCount DESC")
+    List<Note> findPopularExcluding(@Param("excludeIds") List<Long> excludeIds, Pageable pageable);
+
+    @Query("SELECT COALESCE(SUM(n.viewCount), 0) FROM Note n WHERE n.userId = :userId")
+    long sumViewCountByUserId(@Param("userId") Long userId);
 }
