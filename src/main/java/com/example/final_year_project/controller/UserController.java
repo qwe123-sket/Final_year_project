@@ -2,6 +2,7 @@ package com.example.final_year_project.controller;
 
 import com.example.final_year_project.common.Result;
 import com.example.final_year_project.dto.user.PasswordChangeRequest;
+import com.example.final_year_project.dto.user.UserStatsVO;
 import com.example.final_year_project.dto.user.UserUpdateRequest;
 import com.example.final_year_project.dto.user.UserVO;
 import com.example.final_year_project.security.CurrentUser;
@@ -27,6 +28,12 @@ public class UserController {
     public Result<UserVO> updateProfile(@Valid @RequestBody UserUpdateRequest req) {
         Long userId = CurrentUser.getUserId();
         return Result.ok(userService.updateProfile(userId, req));
+    }
+
+    @GetMapping("/stats")
+    public Result<UserStatsVO> getStats() {
+        Long userId = CurrentUser.getUserId();
+        return Result.ok(userService.getStats(userId));
     }
 
     @PutMapping("/password")
