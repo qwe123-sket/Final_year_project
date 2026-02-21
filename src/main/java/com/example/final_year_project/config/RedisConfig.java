@@ -7,21 +7,22 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericToStringSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
-/**
- * Redis 配置：缓存与计数用 Template
- */
 @Configuration
 public class RedisConfig {
 
+    /**
+     * 专门给计数场景用的 RedisTemplate<String, Long>，
+     * 默认的 RedisTemplate 序列化方式不太适合做 increment 操作
+     */
     @Bean
-    public RedisTemplate<String, Long> redisTemplateLong(RedisConnectionFactory connectionFactory) {
-        RedisTemplate<String, Long> t = new RedisTemplate<>();
-        t.setConnectionFactory(connectionFactory);
-        t.setKeySerializer(new StringRedisSerializer());
-        t.setValueSerializer(new GenericToStringSerializer<>(Long.class));
-        t.setHashKeySerializer(new StringRedisSerializer());
-        t.setHashValueSerializer(new GenericToStringSerializer<>(Long.class));
-        t.afterPropertiesSet();
-        return t;
+    public RedisTemplate<String, Long> redisTemplateLong(RedisConnectionFactory factory) {
+        RedisTemplate<String, Long> tpl = new RedisTemplate<>();
+        tpl.setConnectionFactory(factory);
+        tpl.setKeySerializer(new StringRedisSerializer());
+        tpl.setValueSerializer(new GenericToStringSerializer<>(Long.class));
+        tpl.setHashKeySerializer(new StringRedisSerializer());
+        tpl.setHashValueSerializer(new GenericToStringSerializer<>(Long.class));
+        tpl.afterPropertiesSet();
+        return tpl;
     }
 }

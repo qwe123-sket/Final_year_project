@@ -1,7 +1,8 @@
 package com.example.final_year_project.exception;
 
 /**
- * 业务异常
+ * 自定义业务异常，会被 GlobalExceptionHandler 统一处理。
+ * 前端会收到 {code, message} 格式的响应。
  */
 public class BusinessException extends RuntimeException {
 
@@ -17,7 +18,5 @@ public class BusinessException extends RuntimeException {
         this.code = code;
     }
 
-    public int getCode() {
-        return code;
-    }
+    public int getCode() { return code; }
 }

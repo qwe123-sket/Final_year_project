@@ -4,7 +4,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
- * 获取当前登录用户 ID（JWT 解析出的 ClaimsPrincipal）
+ * 工具类，从 SecurityContext 拿当前登录用户的 ID。
+ * 没有登录的话 getUserId() 会抛异常，getUserIdOrNull() 返回 null。
  */
 public final class CurrentUser {
 
@@ -12,10 +13,9 @@ public final class CurrentUser {
 
     public static Long getUserIdOrNull() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated() || !(auth.getPrincipal() instanceof ClaimsPrincipal)) {
-            return null;
-        }
-        return ((ClaimsPrincipal) auth.getPrincipal()).getUserId();
+        if (auth == null || !auth.isAuthenticated()) return null;
+        if (!(auth.getPrincipal() instanceof ClaimsPrincipal cp)) return null;
+        return cp.getUserId();
     }
 
     public static Long getUserId() {

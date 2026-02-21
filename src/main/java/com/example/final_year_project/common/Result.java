@@ -8,7 +8,8 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 统一 API 响应体
+ * 统一的接口返回格式。
+ * 前端统一用 code == 200 判断请求是否成功。
  */
 @Data
 @NoArgsConstructor
@@ -31,7 +32,6 @@ public class Result<T> {
         return new Result<>(code, message, null);
     }
 
-    /** 分页数据 */
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
@@ -42,11 +42,11 @@ public class Result<T> {
         private int size;
         private int totalPages;
 
-        public static <T> Result.PageData<T> of(List<T> list, long total, int page, int size) {
-            int totalPages = size > 0 ? (int) Math.ceil((double) total / size) : 0;
-            return new Result.PageData<>(
+        public static <T> PageData<T> of(List<T> list, long total, int page, int size) {
+            int pages = size > 0 ? (int) Math.ceil((double) total / size) : 0;
+            return new PageData<>(
                     list != null ? list : Collections.emptyList(),
-                    total, page, size, totalPages);
+                    total, page, size, pages);
         }
     }
 }

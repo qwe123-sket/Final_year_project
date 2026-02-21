@@ -16,7 +16,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 
 /**
- * JWT 认证过滤器
+ * 每次请求从 Header 里提取 JWT，校验通过后把用户信息放进 SecurityContext。
  */
 @Component
 @RequiredArgsConstructor
@@ -27,24 +27,24 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
-        String token = resolveToken(request);
+                                    FilterChain chain) throws ServletException, IOException {
+        String token = extractToken(request);
         if (StringUtils.hasText(token) && jwtUtil.validateToken(token)) {
             Long userId = jwtUtil.getUserIdFromToken(token);
             String role = jwtUtil.getRoleFromToken(token);
-            ClaimsPrincipal principal = new ClaimsPrincipal(userId, role);
-            UsernamePasswordAuthenticationToken auth =
-                    new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+
+            var principal = new ClaimsPrincipal(userId, role);
+            var auth = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
             auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(auth);
         }
-        filterChain.doFilter(request, response);
+        chain.doFilter(request, response);
     }
 
-    private String resolveToken(HttpServletRequest request) {
-        String bearer = request.getHeader(jwtProperties.getHeader());
-        if (StringUtils.hasText(bearer) && bearer.startsWith(jwtProperties.getPrefix())) {
-            return bearer.substring(jwtProperties.getPrefix().length()).trim();
+    private String extractToken(HttpServletRequest request) {
+        String header = request.getHeader(jwtProperties.getHeader());
+        if (StringUtils.hasText(header) && header.startsWith(jwtProperties.getPrefix())) {
+            return header.substring(jwtProperties.getPrefix().length()).trim();
         }
         return null;
     }

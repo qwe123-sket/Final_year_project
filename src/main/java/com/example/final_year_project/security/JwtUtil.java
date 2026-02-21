@@ -9,18 +9,16 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
-/**
- * JWT 生成与解析
- */
 @Component
 public class JwtUtil {
 
     private final JwtProperties props;
-    private final SecretKey key;
+    private final SecretKey signingKey;
 
     public JwtUtil(JwtProperties props) {
         this.props = props;
-        this.key = Keys.hmacShaKeyFor(props.getSecret().getBytes(StandardCharsets.UTF_8));
+        // 用 HMAC-SHA 从配置的 secret 派生签名密钥
+        this.signingKey = Keys.hmacShaKeyFor(props.getSecret().getBytes(StandardCharsets.UTF_8));
     }
 
     public String generateToken(Long userId, String username, String role) {
@@ -32,13 +30,13 @@ public class JwtUtil {
                 .claim("role", role)
                 .issuedAt(now)
                 .expiration(expiry)
-                .signWith(key)
+                .signWith(signingKey)
                 .compact();
     }
 
     public Claims parseToken(String token) {
         return Jwts.parser()
-                .verifyWith(key)
+                .verifyWith(signingKey)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
@@ -58,6 +56,7 @@ public class JwtUtil {
             parseToken(token);
             return true;
         } catch (JwtException | IllegalArgumentException e) {
+            // token 过期或者被篡改
             return false;
         }
     }

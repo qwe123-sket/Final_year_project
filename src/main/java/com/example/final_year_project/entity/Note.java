@@ -6,17 +6,13 @@ import lombok.*;
 
 import java.time.Instant;
 
-/**
- * 笔记实体
- */
 @Entity
 @Table(name = "note", indexes = {
     @Index(name = "idx_note_user_id", columnList = "user_id"),
     @Index(name = "idx_note_status", columnList = "status"),
     @Index(name = "idx_note_created_at", columnList = "created_at")
 })
-@Getter
-@Setter
+@Getter @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -44,7 +40,7 @@ public class Note {
     @Builder.Default
     private NoteStatus status = NoteStatus.PENDING;
 
-    /** 拒绝原因（敏感词/违规说明） */
+    // 审核不通过时填写原因
     @Column(name = "reject_reason", length = 512)
     private String rejectReason;
 

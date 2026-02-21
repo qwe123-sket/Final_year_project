@@ -13,53 +13,52 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 全局异常处理
+ * 统一异常处理，把异常转成标准的 JSON 响应格式。
+ * 避免直接把堆栈信息暴露给前端。
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<Map<String, Object>> handleBusiness(BusinessException e) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("code", e.getCode());
-        body.put("message", e.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    public ResponseEntity<Map<String, Object>> handleBusiness(BusinessException ex) {
+        return buildResponse(ex.getCode(), ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(BadCredentialsException.class)
-    public ResponseEntity<Map<String, Object>> handleBadCredentials(BadCredentialsException e) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("code", 401);
-        body.put("message", "Invalid username or password");
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
+    public ResponseEntity<Map<String, Object>> handleBadCredentials(BadCredentialsException ex) {
+        return buildResponse(401, "Invalid username or password", HttpStatus.UNAUTHORIZED);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException e) {
-        Map<String, Object> body = new HashMap<>();
-        body.put("code", 403);
-        body.put("message", "Access denied");
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+    public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
+        return buildResponse(403, "Access denied", HttpStatus.FORBIDDEN);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException e) {
-        Map<String, String> errors = new HashMap<>();
-        for (FieldError err : e.getBindingResult().getFieldErrors()) {
-            errors.put(err.getField(), err.getDefaultMessage());
+    public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException ex) {
+        Map<String, String> fieldErrors = new HashMap<>();
+        for (FieldError err : ex.getBindingResult().getFieldErrors()) {
+            fieldErrors.put(err.getField(), err.getDefaultMessage());
         }
         Map<String, Object> body = new HashMap<>();
         body.put("code", 400);
         body.put("message", "Validation failed");
-        body.put("errors", errors);
+        body.put("errors", fieldErrors);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
+    // 兜底，防止未知异常返回 500 的堆栈
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>> handleOther(Exception e) {
+    public ResponseEntity<Map<String, Object>> handleOther(Exception ex) {
+        // TODO: 生产环境应该接入日志系统 (slf4j) 记录详细堆栈
+        String msg = ex.getMessage() != null ? ex.getMessage() : "Internal server error";
+        return buildResponse(500, msg, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    private ResponseEntity<Map<String, Object>> buildResponse(int code, String message, HttpStatus status) {
         Map<String, Object> body = new HashMap<>();
-        body.put("code", 500);
-        body.put("message", e.getMessage() != null ? e.getMessage() : "Internal server error");
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
+        body.put("code", code);
+        body.put("message", message);
+        return ResponseEntity.status(status).body(body);
     }
 }
