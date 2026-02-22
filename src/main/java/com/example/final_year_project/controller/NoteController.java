@@ -6,8 +6,12 @@ import com.example.final_year_project.dto.note.NoteUpdateRequest;
 import com.example.final_year_project.dto.note.NoteVO;
 import com.example.final_year_project.common.PageRequest;
 import com.example.final_year_project.security.CurrentUser;
+import com.example.final_year_project.entity.Note;
+import com.example.final_year_project.repository.NoteRepository;
+import com.example.final_year_project.repository.UserRepository;
 import com.example.final_year_project.service.NoteService;
 import com.example.final_year_project.service.NoteLikeService;
+import com.example.final_year_project.service.NotificationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -22,6 +26,9 @@ public class NoteController {
 
     private final NoteService noteService;
     private final NoteLikeService noteLikeService;
+    private final NotificationService notificationService;
+    private final NoteRepository noteRepository;
+    private final UserRepository userRepository;
 
     @PostMapping
     public Result<NoteVO> create(@Valid @RequestBody NoteCreateRequest req) {
@@ -76,7 +83,18 @@ public class NoteController {
 
     @PostMapping("/{id}/like")
     public Result<Void> like(@PathVariable Long id) {
-        noteLikeService.like(CurrentUser.getUserId(), id);
+        Long userId = CurrentUser.getUserId();
+        noteLikeService.like(userId, id);
+        noteRepository.findById(id).ifPresent(note -> {
+            if (!note.getUserId().equals(userId)) {
+                String fromName = userRepository.findById(userId)
+                        .map(u -> u.getNickname() != null ? u.getNickname() : u.getUsername())
+                        .orElse("Someone");
+                notificationService.send(note.getUserId(), "LIKE",
+                        fromName + " liked your note \"" + note.getTitle() + "\"",
+                        id, userId, fromName);
+            }
+        });
         return Result.ok();
     }
 

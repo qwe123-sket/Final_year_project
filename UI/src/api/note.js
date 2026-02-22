@@ -17,3 +17,12 @@ export const unlikeNote = (id) => request.delete(`/notes/${id}/like`)
 // 热门
 export const getTrending = (params) => request.get('/notes/trending', { params })
 export const getHotTags = (params) => request.get('/notes/tags/hot', { params })
+
+// 图片上传
+export function uploadImage(file) {
+  const fd = new FormData()
+  fd.append('file', file)
+  return request.post('/upload/image', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}

@@ -3,6 +3,9 @@
     <div v-if="note" class="detail-wrap">
       <div class="reading-progress" :style="{ width: scrollProgress + '%' }"></div>
       <div class="detail-card">
+        <div v-if="note.coverImage" class="detail-cover">
+          <img :src="note.coverImage" alt="cover" />
+        </div>
         <div class="detail-header">
           <h1>{{ note.title }}</h1>
           <div class="meta-row">
@@ -31,7 +34,7 @@
             </el-button>
           </div>
         </div>
-        <article class="detail-content" ref="contentRef" v-html="note.content || '(No content)'"></article>
+        <article class="detail-content markdown-body" ref="contentRef" v-html="renderedContent"></article>
       </div>
 
       <div class="replies-card">
@@ -79,6 +82,20 @@ import { addFavorite, removeFavorite } from '@/api/favorite'
 import { recordBrowse } from '@/api/browse'
 import { View, Star, Clock, Share } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { marked } from 'marked'
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github-dark.css'
+
+marked.setOptions({
+  highlight(code, lang) {
+    if (lang && hljs.getLanguage(lang)) {
+      return hljs.highlight(code, { language: lang }).value
+    }
+    return hljs.highlightAuto(code).value
+  },
+  breaks: true,
+  gfm: true,
+})
 
 const route = useRoute()
 const userStore = useUserStore()
@@ -94,6 +111,15 @@ const scrollProgress = ref(0)
 const contentRef = ref(null)
 
 const noteId = computed(() => Number(route.params.id))
+
+const renderedContent = computed(() => {
+  if (!note.value?.content) return '<p>(No content)</p>'
+  try {
+    return marked(note.value.content)
+  } catch {
+    return note.value.content
+  }
+})
 
 const readingTime = computed(() => {
   if (!note.value?.content) return 1
@@ -126,6 +152,7 @@ async function load() {
   loading.value = true
   try {
     note.value = await getNote(noteId.value)
+    savedNoteId = noteId.value
     await recordView(noteId.value)
     browseStart.value = Date.now()
     const list = await listReplies(noteId.value, { page: 0, size: 50 })
@@ -163,12 +190,15 @@ async function submitReply() {
   }
 }
 
+// 用变量存一下当前笔记 ID，防止路由切走后 noteId 变成 NaN
+let savedNoteId = null
+
 async function reportBrowse() {
-  if (!userStore.isLogin) return
+  if (!userStore.isLogin || !savedNoteId) return
   const duration = Math.floor((Date.now() - browseStart.value) / 1000)
   if (duration < 1) return
   try {
-    await recordBrowse({ noteId: noteId.value, browseDurationSeconds: duration })
+    await recordBrowse({ noteId: savedNoteId, browseDurationSeconds: duration })
   } catch {}
 }
 
@@ -211,6 +241,19 @@ onBeforeUnmount(() => {
   border: 1px solid var(--color-border);
   overflow: hidden;
   margin-bottom: 24px;
+}
+
+.detail-cover {
+  width: 100%;
+  max-height: 400px;
+  overflow: hidden;
+}
+
+.detail-cover img {
+  width: 100%;
+  max-height: 400px;
+  object-fit: cover;
+  display: block;
 }
 
 .detail-header {
@@ -259,18 +302,110 @@ onBeforeUnmount(() => {
   line-height: 1.9;
   font-size: 1.02rem;
   color: var(--color-text);
-  white-space: pre-wrap;
   max-width: 680px;
 }
 
-.detail-content :deep(p:first-of-type::first-letter) {
-  font-size: 2.4em;
-  font-family: var(--font-heading);
-  font-weight: 700;
+.detail-content :deep(img) {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 12px 0;
+  display: block;
+}
+
+.detail-content :deep(h1),
+.detail-content :deep(h2),
+.detail-content :deep(h3),
+.detail-content :deep(h4) {
+  margin: 1.4em 0 0.6em;
+  line-height: 1.4;
+  color: var(--color-text);
+}
+
+.detail-content :deep(h1) { font-size: 1.6rem; }
+.detail-content :deep(h2) { font-size: 1.35rem; border-bottom: 1px solid var(--color-border); padding-bottom: 0.3em; }
+.detail-content :deep(h3) { font-size: 1.15rem; }
+
+.detail-content :deep(p) {
+  margin: 0.8em 0;
+}
+
+.detail-content :deep(blockquote) {
+  border-left: 4px solid var(--color-primary);
+  margin: 1em 0;
+  padding: 0.6em 1em;
+  background: var(--color-primary-muted);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--color-text-secondary);
+}
+
+.detail-content :deep(pre) {
+  background: #1e1e2e;
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
+  overflow-x: auto;
+  margin: 1em 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.detail-content :deep(pre code) {
+  background: none;
+  padding: 0;
+  color: #cdd6f4;
+  font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+}
+
+.detail-content :deep(code) {
+  background: var(--color-primary-muted);
   color: var(--color-primary);
-  float: left;
-  margin: 0.05em 0.12em 0 0;
-  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+}
+
+.detail-content :deep(ul),
+.detail-content :deep(ol) {
+  padding-left: 1.8em;
+  margin: 0.8em 0;
+}
+
+.detail-content :deep(li) {
+  margin: 0.3em 0;
+}
+
+.detail-content :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+}
+
+.detail-content :deep(th),
+.detail-content :deep(td) {
+  border: 1px solid var(--color-border);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.detail-content :deep(th) {
+  background: var(--color-primary-muted);
+  font-weight: 600;
+}
+
+.detail-content :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 1.5em 0;
+}
+
+.detail-content :deep(a) {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.detail-content :deep(a:hover) {
+  text-decoration: underline;
 }
 
 .replies-card {

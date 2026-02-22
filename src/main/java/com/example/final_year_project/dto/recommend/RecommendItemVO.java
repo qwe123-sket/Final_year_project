@@ -11,6 +11,7 @@ public class RecommendItemVO {
     private String title;
     private String content;
     private String authorName;
+    private String coverImage;
     private Long viewCount;
     private Long likeCount;
     private List<String> tags;

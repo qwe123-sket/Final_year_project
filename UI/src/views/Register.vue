@@ -43,6 +43,23 @@
             <el-form-item label="Email" prop="email">
               <el-input v-model="form.email" placeholder="Optional" size="large" />
             </el-form-item>
+
+            <!-- 图形验证码 -->
+            <el-form-item label="Captcha" prop="captchaCode">
+              <div class="captcha-row">
+                <el-input v-model="form.captchaCode" placeholder="Enter captcha" size="large" maxlength="4" />
+                <img
+                  v-if="captchaImage"
+                  :src="captchaImage"
+                  class="captcha-img"
+                  alt="captcha"
+                  title="Click to refresh"
+                  @click="loadCaptcha"
+                />
+                <div v-else class="captcha-placeholder" @click="loadCaptcha">Loading...</div>
+              </div>
+            </el-form-item>
+
             <el-form-item label="Nickname" prop="nickname">
               <el-input v-model="form.nickname" placeholder="Optional" size="large" />
             </el-form-item>
@@ -65,9 +82,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { getCaptcha } from '@/api/auth'
 import { ElMessage } from 'element-plus'
 import { EditPen, TrendCharts, Star } from '@element-plus/icons-vue'
 
@@ -75,11 +93,14 @@ const router = useRouter()
 const userStore = useUserStore()
 const formRef = ref()
 const loading = ref(false)
+const captchaImage = ref('')
 
 const form = reactive({
   username: '',
   password: '',
   email: '',
+  captchaKey: '',
+  captchaCode: '',
   nickname: '',
   adminSecret: '',
 })
@@ -92,6 +113,9 @@ const rules = {
   password: [
     { required: true, message: 'Please enter password', trigger: 'blur' },
     { min: 6, max: 32, message: 'Length 6-32 characters', trigger: 'blur' },
+  ],
+  captchaCode: [
+    { required: true, message: 'Please enter captcha', trigger: 'blur' },
   ],
 }
 
@@ -119,21 +143,41 @@ const pwdStrengthText = computed(() => {
   return 'Strong'
 })
 
+async function loadCaptcha() {
+  try {
+    const data = await getCaptcha()
+    form.captchaKey = data.key
+    captchaImage.value = data.image
+    form.captchaCode = ''
+  } catch {
+    ElMessage.error('Failed to load captcha')
+  }
+}
+
 async function onSubmit() {
   await formRef.value.validate()
   loading.value = true
   try {
-    const data = { ...form }
-    if (!data.adminSecret) delete data.adminSecret
-    if (!data.email) delete data.email
-    if (!data.nickname) delete data.nickname
+    const data = {
+      username: form.username,
+      password: form.password,
+      captchaKey: form.captchaKey,
+      captchaCode: form.captchaCode,
+    }
+    if (form.email) data.email = form.email
+    if (form.nickname) data.nickname = form.nickname
+    if (form.adminSecret) data.adminSecret = form.adminSecret
     await userStore.register(data)
     ElMessage.success('Sign up successful')
     router.push('/')
+  } catch {
+    loadCaptcha()
   } finally {
     loading.value = false
   }
 }
+
+onMounted(loadCaptcha)
 </script>
 
 <style scoped>
@@ -316,6 +360,44 @@ async function onSubmit() {
 .pwd-label.weak { color: #ef4444; }
 .pwd-label.medium { color: #f59e0b; }
 .pwd-label.strong { color: #22c55e; }
+
+.captcha-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  align-items: center;
+}
+
+.captcha-row .el-input {
+  flex: 1;
+}
+
+.captcha-img {
+  height: 40px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+  transition: opacity 0.2s;
+}
+
+.captcha-img:hover {
+  opacity: 0.8;
+}
+
+.captcha-placeholder {
+  height: 40px;
+  width: 120px;
+  border-radius: 6px;
+  border: 1px dashed var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
 
 .submit-btn {
   width: 100%;

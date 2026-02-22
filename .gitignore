@@ -34,3 +34,6 @@ build/
 
 ### 本地配置（勿提交） ###
 src/main/resources/application-local.yml
+
+### 上传文件目录 ###
+uploads/

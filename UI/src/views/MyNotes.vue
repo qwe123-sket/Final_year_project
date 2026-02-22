@@ -115,6 +115,13 @@ function formatCount(v) {
 }
 
 function coverStyle(n) {
+  if (n.coverImage) {
+    return {
+      backgroundImage: `url(${n.coverImage})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+    }
+  }
   const hue = (Number(n.id) * 137.508) % 360
   return {
     background: `linear-gradient(135deg, hsl(${hue}, 45%, 88%) 0%, hsl(${hue}, 35%, 78%) 100%)`,

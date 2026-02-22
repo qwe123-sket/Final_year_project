@@ -14,6 +14,7 @@ public class NoteVO {
     private String authorName;
     private String title;
     private String content;
+    private String coverImage;
     private NoteStatus status;
     private String rejectReason;
     private Long viewCount;

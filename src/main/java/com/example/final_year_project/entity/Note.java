@@ -35,6 +35,9 @@ public class Note {
     @Column(columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "cover_image", length = 512)
+    private String coverImage;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
     @Builder.Default

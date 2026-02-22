@@ -23,6 +23,7 @@
           <el-icon v-if="isDark"><Sunny /></el-icon>
           <el-icon v-else><Moon /></el-icon>
         </button>
+        <NotificationBell />
         <template v-if="userStore.isLogin">
           <el-dropdown trigger="click" @command="handleCommand">
             <span class="user-btn">
@@ -109,6 +110,7 @@ import { useUserStore } from '@/stores/user'
 import { useTheme } from '@/composables/useTheme'
 import { Search, ArrowDown, Compass, Plus, Document, Star, Setting, MoreFilled, TrendCharts, ChatDotRound, Sunny, Moon } from '@element-plus/icons-vue'
 import BackToTop from '@/components/BackToTop.vue'
+import NotificationBell from '@/components/NotificationBell.vue'
 
 const { isDark, toggle: toggleTheme } = useTheme()
 

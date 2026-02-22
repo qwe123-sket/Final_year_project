@@ -8,7 +8,7 @@ const request = axios.create({
   timeout: 15000,
 })
 
-// 请求拦截 —— 自动带上 token
+// 请求拦截，自动带 token
 request.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem(TOKEN_KEY)
@@ -26,7 +26,7 @@ function extractMsg(err) {
     try {
       const parsed = JSON.parse(data)
       if (parsed?.message) return parsed.message
-    } catch (_) { /* 不是 JSON，忽略 */ }
+    } catch (_) { /* skip */ }
   }
   return null
 }

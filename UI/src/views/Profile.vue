@@ -15,6 +15,45 @@
 
     <div class="profile-body">
       <el-tabs v-model="activeTab">
+        <!-- 数据面板 -->
+        <el-tab-pane label="Dashboard" name="dashboard">
+          <div v-if="dashLoading" v-loading="true" style="min-height: 300px"></div>
+          <template v-else-if="dash">
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-value">{{ dash.stats.notesPublished }}</div>
+                <div class="stat-label">Notes</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value">{{ formatNum(dash.stats.totalViews) }}</div>
+                <div class="stat-label">Views</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value">{{ formatNum(dash.stats.totalLikes) }}</div>
+                <div class="stat-label">Likes</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value">{{ formatNum(dash.stats.totalFavorited) }}</div>
+                <div class="stat-label">Favorited</div>
+              </div>
+            </div>
+            <div class="charts-row">
+              <div class="chart-card">
+                <h3>Publishing trend (last 30 days)</h3>
+                <div ref="trendChartRef" class="chart-box"></div>
+              </div>
+              <div class="chart-card">
+                <h3>Tag distribution</h3>
+                <div ref="tagChartRef" class="chart-box"></div>
+              </div>
+            </div>
+            <div class="chart-card chart-full">
+              <h3>Views trend (last 30 days)</h3>
+              <div ref="viewChartRef" class="chart-box"></div>
+            </div>
+          </template>
+        </el-tab-pane>
+
         <el-tab-pane label="Basic info" name="info">
           <el-form ref="profileFormRef" :model="profile" label-position="top" class="profile-form">
             <el-form-item label="Username">
@@ -50,17 +89,23 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { updateProfile as apiUpdate, changePassword as apiChange } from '@/api/user'
+import { updateProfile as apiUpdate, changePassword as apiChange, getUserDashboard } from '@/api/user'
 import { useUserStore } from '@/stores/user'
+import * as echarts from 'echarts'
 
 const userStore = useUserStore()
-const activeTab = ref('info')
+const activeTab = ref('dashboard')
 const profileFormRef = ref()
 const pwdFormRef = ref()
 const profileLoading = ref(false)
 const pwdLoading = ref(false)
+const dashLoading = ref(false)
+const dash = ref(null)
+const trendChartRef = ref(null)
+const tagChartRef = ref(null)
+const viewChartRef = ref(null)
 
 const profile = reactive({ username: '', nickname: '', email: '' })
 const pwdForm = reactive({ oldPassword: '', newPassword: '' })
@@ -94,6 +139,99 @@ const memberSince = computed(() => {
   return new Date(info.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
 })
 
+function formatNum(n) {
+  if (!n) return '0'
+  if (n >= 10000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + 'w'
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
+  return String(n)
+}
+
+async function loadDashboard() {
+  dashLoading.value = true
+  try {
+    dash.value = await getUserDashboard()
+    await nextTick()
+    renderCharts()
+  } finally {
+    dashLoading.value = false
+  }
+}
+
+function renderCharts() {
+  if (!dash.value) return
+
+  // 发布趋势折线图
+  if (trendChartRef.value) {
+    const chart = echarts.init(trendChartRef.value)
+    chart.setOption({
+      tooltip: { trigger: 'axis' },
+      grid: { left: 40, right: 20, top: 20, bottom: 30 },
+      xAxis: {
+        type: 'category',
+        data: dash.value.dailyNotes.map(d => d.date),
+        axisLabel: { fontSize: 11, interval: 4 },
+      },
+      yAxis: { type: 'value', minInterval: 1 },
+      series: [{
+        type: 'line',
+        data: dash.value.dailyNotes.map(d => d.count),
+        smooth: true,
+        areaStyle: { opacity: 0.15 },
+        lineStyle: { width: 2.5 },
+        itemStyle: { color: '#6366f1' },
+      }],
+    })
+    window.addEventListener('resize', () => chart.resize())
+  }
+
+  // 浏览量趋势
+  if (viewChartRef.value) {
+    const chart = echarts.init(viewChartRef.value)
+    chart.setOption({
+      tooltip: { trigger: 'axis' },
+      grid: { left: 50, right: 20, top: 20, bottom: 30 },
+      xAxis: {
+        type: 'category',
+        data: dash.value.dailyViews.map(d => d.date),
+        axisLabel: { fontSize: 11, interval: 4 },
+      },
+      yAxis: { type: 'value' },
+      series: [{
+        type: 'bar',
+        data: dash.value.dailyViews.map(d => d.count),
+        itemStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: '#14b8a6' },
+            { offset: 1, color: '#6366f1' },
+          ]),
+          borderRadius: [4, 4, 0, 0],
+        },
+      }],
+    })
+    window.addEventListener('resize', () => chart.resize())
+  }
+
+  // 标签饼图
+  if (tagChartRef.value) {
+    const chart = echarts.init(tagChartRef.value)
+    const tagData = dash.value.tagDistribution.map(t => ({ name: t.name, value: t.count }))
+    chart.setOption({
+      tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+      series: [{
+        type: 'pie',
+        radius: ['40%', '70%'],
+        center: ['50%', '50%'],
+        data: tagData.length > 0 ? tagData : [{ name: 'No tags', value: 1 }],
+        label: { fontSize: 12 },
+        emphasis: {
+          itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.2)' },
+        },
+      }],
+    })
+    window.addEventListener('resize', () => chart.resize())
+  }
+}
+
 async function load() {
   await userStore.fetchProfile()
   Object.assign(profile, userStore.userInfo)
@@ -123,12 +261,19 @@ async function changePassword() {
   }
 }
 
-onMounted(load)
+watch(activeTab, (tab) => {
+  if (tab === 'dashboard' && !dash.value) loadDashboard()
+})
+
+onMounted(() => {
+  load()
+  loadDashboard()
+})
 </script>
 
 <style scoped>
 .profile {
-  max-width: 640px;
+  max-width: 900px;
   margin: 0 auto;
 }
 
@@ -198,5 +343,79 @@ onMounted(load)
 .profile-form {
   max-width: 420px;
   margin-top: 8px;
+}
+
+/* Dashboard styles */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 20px 16px;
+  text-align: center;
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+
+.stat-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  font-family: var(--font-heading);
+}
+
+.stat-label {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+.charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.chart-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.chart-card h3 {
+  font-size: 0.95rem;
+  margin-bottom: 12px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.chart-full {
+  width: 100%;
+}
+
+.chart-box {
+  width: 100%;
+  height: 260px;
+}
+
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .charts-row {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

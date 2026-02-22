@@ -35,4 +35,6 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
 
     @Query("SELECT COALESCE(SUM(n.viewCount), 0) FROM Note n WHERE n.userId = :userId")
     long sumViewCountByUserId(@Param("userId") Long userId);
+
+    List<Note> findByUserIdAndCreatedAtAfter(Long userId, Instant since);
 }

@@ -1,6 +1,7 @@
 package com.example.final_year_project.controller;
 
 import com.example.final_year_project.common.Result;
+import com.example.final_year_project.dto.user.DashboardVO;
 import com.example.final_year_project.dto.user.PasswordChangeRequest;
 import com.example.final_year_project.dto.user.UserStatsVO;
 import com.example.final_year_project.dto.user.UserUpdateRequest;
@@ -34,6 +35,12 @@ public class UserController {
     public Result<UserStatsVO> getStats() {
         Long userId = CurrentUser.getUserId();
         return Result.ok(userService.getStats(userId));
+    }
+
+    @GetMapping("/dashboard")
+    public Result<DashboardVO> getDashboard() {
+        Long userId = CurrentUser.getUserId();
+        return Result.ok(userService.getDashboard(userId));
     }
 
     @PutMapping("/password")

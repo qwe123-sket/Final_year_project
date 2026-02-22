@@ -21,6 +21,14 @@ public class RegisterRequest {
     @Size(max = 64)
     private String nickname;
 
-    /** 管理员注册密钥：与配置 app.admin-register-secret 一致时注册为管理员，不传或错误则为普通用户 */
+    /** 图形验证码 key（从 /api/auth/captcha 获取） */
+    @NotBlank(message = "Captcha key is required")
+    private String captchaKey;
+
+    /** 用户输入的图形验证码 */
+    @NotBlank(message = "Captcha code is required")
+    private String captchaCode;
+
+    /** 管理员注册密钥 */
     private String adminSecret;
 }

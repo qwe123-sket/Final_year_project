@@ -22,13 +22,18 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final CaptchaService captchaService;
 
     @Value("${app.admin-register-secret:}")
     private String adminRegisterSecret;
 
-    // TODO: 后续可以加邮箱验证功能
     @Transactional
     public LoginResponse register(RegisterRequest req) {
+        // 校验图形验证码
+        if (!captchaService.verify(req.getCaptchaKey(), req.getCaptchaCode())) {
+            throw new BusinessException("Captcha is incorrect or expired");
+        }
+
         if (userRepository.existsByUsername(req.getUsername())) {
             throw new BusinessException("Username already exists");
         }
@@ -37,7 +42,6 @@ public class AuthService {
             throw new BusinessException("Email already registered");
         }
 
-        // 判断是否用管理员密钥注册
         UserRole role = UserRole.USER;
         if (req.getAdminSecret() != null && !req.getAdminSecret().isBlank()
                 && adminRegisterSecret != null && !adminRegisterSecret.isBlank()
@@ -66,7 +70,6 @@ public class AuthService {
             throw new BusinessException(401, "Invalid username or password");
         }
 
-        // 检查账号状态
         LoginUser loginUser = new LoginUser(user);
         if (!loginUser.isAccountNonLocked()) {
             throw new BusinessException(403, "Your account has been disabled");

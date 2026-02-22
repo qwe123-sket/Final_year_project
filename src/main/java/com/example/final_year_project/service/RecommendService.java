@@ -111,6 +111,7 @@ public class RecommendService {
                 content = content.substring(0, SUMMARY_LEN) + "...";
             }
             vo.setContent(content);
+            vo.setCoverImage(n.getCoverImage());
             vo.setViewCount(cacheService.getViewCount(n.getId()));
             vo.setLikeCount(likeCountMap.getOrDefault(n.getId(), 0L));
             vo.setTags(tagsMap.getOrDefault(n.getId(), Collections.emptyList()));

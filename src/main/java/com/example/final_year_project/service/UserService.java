@@ -1,19 +1,27 @@
 package com.example.final_year_project.service;
 
+import com.example.final_year_project.dto.user.DashboardVO;
 import com.example.final_year_project.dto.user.PasswordChangeRequest;
 import com.example.final_year_project.dto.user.UserStatsVO;
 import com.example.final_year_project.dto.user.UserUpdateRequest;
 import com.example.final_year_project.dto.user.UserVO;
+import com.example.final_year_project.entity.Note;
+import com.example.final_year_project.entity.NoteTag;
+import com.example.final_year_project.entity.Tag;
 import com.example.final_year_project.entity.User;
 import com.example.final_year_project.exception.BusinessException;
-import com.example.final_year_project.repository.FavoriteRepository;
-import com.example.final_year_project.repository.NoteLikeRepository;
-import com.example.final_year_project.repository.NoteRepository;
-import com.example.final_year_project.repository.UserRepository;
+import com.example.final_year_project.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +31,8 @@ public class UserService {
     private final NoteRepository noteRepository;
     private final FavoriteRepository favoriteRepository;
     private final NoteLikeRepository noteLikeRepository;
+    private final NoteTagRepository noteTagRepository;
+    private final TagRepository tagRepository;
     private final PasswordEncoder passwordEncoder;
 
     public UserVO getProfile(Long userId) {
@@ -73,6 +83,71 @@ public class UserService {
                 .totalLikes(likes)
                 .totalFavorited(favorited)
                 .favoritesCount(myFavs)
+                .build();
+    }
+
+    public DashboardVO getDashboard(Long userId) {
+        UserStatsVO stats = getStats(userId);
+
+        Instant since = Instant.now().minus(30, ChronoUnit.DAYS);
+        List<Note> recentNotes = noteRepository.findByUserIdAndCreatedAtAfter(userId, since);
+
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MM-dd");
+        ZoneId zone = ZoneId.systemDefault();
+
+        // last 30 days, by date
+        Map<String, Long> dailyMap = new LinkedHashMap<>();
+        for (int i = 29; i >= 0; i--) {
+            dailyMap.put(LocalDate.now().minusDays(i).format(fmt), 0L);
+        }
+        for (Note n : recentNotes) {
+            String day = n.getCreatedAt().atZone(zone).toLocalDate().format(fmt);
+            dailyMap.merge(day, 1L, Long::sum);
+        }
+        List<DashboardVO.DailyCount> dailyNotes = dailyMap.entrySet().stream()
+                .map(e -> new DashboardVO.DailyCount(e.getKey(), e.getValue())).toList();
+
+        // views per day
+        Map<String, Long> viewMap = new LinkedHashMap<>(dailyMap);
+        for (var key : viewMap.keySet()) viewMap.put(key, 0L);
+        for (Note n : recentNotes) {
+            String day = n.getCreatedAt().atZone(zone).toLocalDate().format(fmt);
+            viewMap.merge(day, n.getViewCount(), Long::sum);
+        }
+        List<DashboardVO.DailyCount> dailyViews = viewMap.entrySet().stream()
+                .map(e -> new DashboardVO.DailyCount(e.getKey(), e.getValue())).toList();
+
+        // tag distribution (top 10)
+        List<Note> allNotes = noteRepository.findByUserIdAndCreatedAtAfter(userId, Instant.EPOCH);
+        List<Long> noteIds = allNotes.stream().map(Note::getId).toList();
+        List<DashboardVO.TagCount> tagDistribution = new ArrayList<>();
+        if (!noteIds.isEmpty()) {
+            var noteTags = noteTagRepository.findByNoteIdIn(noteIds);
+            Map<Long, Long> tagCount = new HashMap<>();
+            for (NoteTag nt : noteTags) {
+                tagCount.merge(nt.getTagId(), 1L, Long::sum);
+            }
+            Set<Long> tagIds = tagCount.keySet();
+            if (!tagIds.isEmpty()) {
+                Map<Long, String> nameMap = new HashMap<>();
+                for (Tag t : tagRepository.findByIdIn(new ArrayList<>(tagIds))) {
+                    nameMap.put(t.getId(), t.getName());
+                }
+                tagCount.entrySet().stream()
+                        .sorted(Map.Entry.<Long, Long>comparingByValue().reversed())
+                        .limit(10)
+                        .forEach(e -> {
+                            String name = nameMap.getOrDefault(e.getKey(), "unknown");
+                            tagDistribution.add(new DashboardVO.TagCount(name, e.getValue()));
+                        });
+            }
+        }
+
+        return DashboardVO.builder()
+                .stats(stats)
+                .dailyNotes(dailyNotes)
+                .dailyViews(dailyViews)
+                .tagDistribution(tagDistribution)
                 .build();
     }
 

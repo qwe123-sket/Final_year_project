@@ -42,6 +42,8 @@ public class SecurityConfig {
                                 "/api/notes/trending", "/api/notes/tags/hot").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/recommend/list").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/notes/*/view").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/uploads/**").permitAll()
+                        .requestMatchers("/ws/**").permitAll()
                         // 笔记详情也放开 (正则匹配 /api/notes/123)
                         .requestMatchers(req ->
                                 req.getMethod().equals("GET")

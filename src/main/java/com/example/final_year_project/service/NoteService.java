@@ -45,6 +45,7 @@ public class NoteService {
                 .userId(userId)
                 .title(req.getTitle().trim())
                 .content(req.getContent() != null ? req.getContent().trim() : null)
+                .coverImage(req.getCoverImage())
                 .status(NoteStatus.PENDING)
                 .build();
         note = noteRepository.save(note);
@@ -66,6 +67,7 @@ public class NoteService {
         }
         if (req.getTitle() != null) note.setTitle(req.getTitle().trim());
         if (req.getContent() != null) note.setContent(req.getContent().trim());
+        if (req.getCoverImage() != null) note.setCoverImage(req.getCoverImage());
         note = noteRepository.save(note);
         noteCacheService.evictNote(noteId);
 
@@ -215,6 +217,7 @@ public class NoteService {
             vo.setUserId(n.getUserId());
             vo.setTitle(n.getTitle());
             vo.setContent(n.getContent());
+            vo.setCoverImage(n.getCoverImage());
             vo.setStatus(n.getStatus());
             vo.setRejectReason(n.getRejectReason());
             vo.setViewCount(noteCacheService.getViewCount(n.getId()));
@@ -240,6 +243,7 @@ public class NoteService {
         vo.setUserId(n.getUserId());
         vo.setTitle(n.getTitle());
         vo.setContent(n.getContent());
+        vo.setCoverImage(n.getCoverImage());
         vo.setStatus(n.getStatus());
         vo.setRejectReason(n.getRejectReason());
         vo.setViewCount(noteCacheService.getViewCount(n.getId()));

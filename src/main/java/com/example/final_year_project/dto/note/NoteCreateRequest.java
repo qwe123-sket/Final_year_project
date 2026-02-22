@@ -16,6 +16,8 @@ public class NoteCreateRequest {
     @Size(max = 10000)
     private String content;
 
+    private String coverImage;
+
     @Size(max = 5, message = "At most 5 tags")
     private List<String> tags;
 }

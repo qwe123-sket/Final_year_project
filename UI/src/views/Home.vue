@@ -140,10 +140,17 @@ function formatCount(val) {
   return String(num)
 }
 
-// 用笔记 ID 生成渐变色，让每张卡片颜色不一样
+// 有封面图就显示图片，否则用 ID 生成渐变色
 function coverStyle(n) {
+  const cover = n.coverImage
+  if (cover) {
+    return {
+      backgroundImage: `url(${cover})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+    }
+  }
   const noteId = n.noteId ?? n.id
-  // 黄金角 137.5° 保证颜色分布均匀
   const hue = (Number(noteId) * 137.508) % 360
   return {
     background: `linear-gradient(135deg, hsl(${hue}, 45%, 88%) 0%, hsl(${hue}, 35%, 78%) 100%)`,
