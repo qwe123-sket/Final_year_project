@@ -151,7 +151,8 @@ async function loadDashboard() {
   try {
     dash.value = await getUserDashboard()
     await nextTick()
-    renderCharts()
+    // 等 DOM 布局完成再画图，避免容器宽高为 0
+    setTimeout(() => renderCharts(), 150)
   } finally {
     dashLoading.value = false
   }
@@ -160,7 +161,10 @@ async function loadDashboard() {
 function renderCharts() {
   if (!dash.value) return
 
-  // 发布趋势折线图
+  const dailyNotes = dash.value.dailyNotes || []
+  const dailyViews = dash.value.dailyViews || []
+  const tagDist = dash.value.tagDistribution || []
+
   if (trendChartRef.value) {
     const chart = echarts.init(trendChartRef.value)
     chart.setOption({
@@ -168,23 +172,23 @@ function renderCharts() {
       grid: { left: 40, right: 20, top: 20, bottom: 30 },
       xAxis: {
         type: 'category',
-        data: dash.value.dailyNotes.map(d => d.date),
+        data: dailyNotes.map(d => d.date),
         axisLabel: { fontSize: 11, interval: 4 },
       },
       yAxis: { type: 'value', minInterval: 1 },
       series: [{
         type: 'line',
-        data: dash.value.dailyNotes.map(d => d.count),
+        data: dailyNotes.map(d => d.count),
         smooth: true,
         areaStyle: { opacity: 0.15 },
         lineStyle: { width: 2.5 },
         itemStyle: { color: '#6366f1' },
       }],
     })
+    chart.resize()
     window.addEventListener('resize', () => chart.resize())
   }
 
-  // 浏览量趋势
   if (viewChartRef.value) {
     const chart = echarts.init(viewChartRef.value)
     chart.setOption({
@@ -192,13 +196,13 @@ function renderCharts() {
       grid: { left: 50, right: 20, top: 20, bottom: 30 },
       xAxis: {
         type: 'category',
-        data: dash.value.dailyViews.map(d => d.date),
+        data: dailyViews.map(d => d.date),
         axisLabel: { fontSize: 11, interval: 4 },
       },
       yAxis: { type: 'value' },
       series: [{
         type: 'bar',
-        data: dash.value.dailyViews.map(d => d.count),
+        data: dailyViews.map(d => d.count),
         itemStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
             { offset: 0, color: '#14b8a6' },
@@ -208,13 +212,13 @@ function renderCharts() {
         },
       }],
     })
+    chart.resize()
     window.addEventListener('resize', () => chart.resize())
   }
 
-  // 标签饼图
   if (tagChartRef.value) {
     const chart = echarts.init(tagChartRef.value)
-    const tagData = dash.value.tagDistribution.map(t => ({ name: t.name, value: t.count }))
+    const tagData = tagDist.map(t => ({ name: t.name, value: t.count }))
     chart.setOption({
       tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
       series: [{
@@ -228,6 +232,7 @@ function renderCharts() {
         },
       }],
     })
+    chart.resize()
     window.addEventListener('resize', () => chart.resize())
   }
 }
