@@ -33,6 +33,11 @@
         >
           <div class="note-card-cover" :style="coverStyle(n)"></div>
           <div class="note-card-body">
+            <div v-if="n.recallSource && n.recallSource !== 'default'" class="recommend-badges">
+              <span class="recommend-tag" :class="n.recallSource">
+                {{ n.recallSource === 'vector' ? 'Guess You Like' : (n.recallSource === 'popular' ? 'Trending' : 'Recommend') }}
+              </span>
+            </div>
             <h3 class="note-card-title">{{ n.title }}</h3>
             <p v-if="n.content" class="note-card-excerpt">{{ excerpt(n.content) }}</p>
             <div class="note-card-footer">
@@ -388,5 +393,34 @@ onMounted(() => {
 
 .fab-btn:hover {
   transform: scale(1.05);
+}
+
+.recommend-badges {
+  margin-bottom: 6px;
+}
+
+.recommend-tag {
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.recommend-tag.vector {
+  background-color: var(--color-primary-muted); /* Fallback or use specific color */
+  background-color: rgba(24, 144, 255, 0.1);
+  color: #1890ff;
+}
+
+.recommend-tag.popular {
+  background-color: rgba(250, 140, 22, 0.1);
+  color: #fa8c16;
+}
+
+.recommend-tag.random {
+  background-color: rgba(0, 0, 0, 0.05);
+  color: var(--color-text-secondary);
 }
 </style>
