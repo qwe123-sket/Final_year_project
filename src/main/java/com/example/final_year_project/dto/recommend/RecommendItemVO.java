@@ -16,4 +16,5 @@ public class RecommendItemVO {
     private Long likeCount;
     private List<String> tags;
     private Double score;
+    private String recallSource;
 }
