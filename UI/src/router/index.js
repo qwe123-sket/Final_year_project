@@ -29,6 +29,7 @@ const routes = [
       { path: 'my/notes', name: 'MyNotes', component: () => import('@/views/MyNotes.vue'), meta: { auth: true } },
       { path: 'my/favorites', name: 'MyFavorites', component: () => import('@/views/MyFavorites.vue'), meta: { auth: true } },
       { path: 'profile', name: 'Profile', component: () => import('@/views/Profile.vue'), meta: { auth: true } },
+      { path: 'user/:id', name: 'UserPublicProfile', component: () => import('@/views/UserPublicProfile.vue') },
       { path: 'admin', name: 'Admin', component: () => import('@/views/Admin.vue'), meta: { auth: true, admin: true } },
     ],
   },

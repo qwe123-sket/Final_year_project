@@ -2,6 +2,7 @@ package com.example.final_year_project.service;
 
 import com.example.final_year_project.dto.user.DashboardVO;
 import com.example.final_year_project.dto.user.PasswordChangeRequest;
+import com.example.final_year_project.dto.user.UserPublicVO;
 import com.example.final_year_project.dto.user.UserStatsVO;
 import com.example.final_year_project.dto.user.UserUpdateRequest;
 import com.example.final_year_project.dto.user.UserVO;
@@ -38,6 +39,40 @@ public class UserService {
     public UserVO getProfile(Long userId) {
         User user = findUserOrThrow(userId);
         return toVO(user);
+    }
+
+    /**
+     * 对外展示的公开个人信息（用于搜索下拉点击后的个人页）。
+     * 仅展示 NORMAL 用户。
+     */
+    public UserPublicVO getPublicProfile(Long userId) {
+        User user = findUserOrThrow(userId);
+        if (user.getStatus() != com.example.final_year_project.entity.enums.UserStatus.NORMAL) {
+            throw new BusinessException("User is not available");
+        }
+        return toPublicVO(user);
+    }
+
+    /**
+     * 按用户名/昵称搜索 NORMAL 用户（用于搜索栏下拉建议）。
+     */
+    public List<UserPublicVO> searchPublicUsers(String keyword, int limit) {
+        String kw = keyword == null ? "" : keyword.trim();
+        if (kw.isEmpty()) return Collections.emptyList();
+
+        int pageSize = Math.max(1, Math.min(limit, 10));
+        org.springframework.data.domain.Pageable pg = org.springframework.data.domain.PageRequest.of(
+                0,
+                pageSize,
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt")
+        );
+
+        var page = userRepository.searchPublicUsers(
+                kw,
+                com.example.final_year_project.entity.enums.UserStatus.NORMAL,
+                pg
+        );
+        return page.getContent().stream().map(this::toPublicVO).toList();
     }
 
     @Transactional
@@ -163,6 +198,18 @@ public class UserService {
         vo.setId(u.getId());
         vo.setUsername(u.getUsername());
         vo.setEmail(u.getEmail());
+        vo.setNickname(u.getNickname());
+        vo.setAvatar(u.getAvatar());
+        vo.setRole(u.getRole());
+        vo.setStatus(u.getStatus());
+        vo.setCreatedAt(u.getCreatedAt());
+        return vo;
+    }
+
+    private UserPublicVO toPublicVO(User u) {
+        UserPublicVO vo = new UserPublicVO();
+        vo.setId(u.getId());
+        vo.setUsername(u.getUsername());
         vo.setNickname(u.getNickname());
         vo.setAvatar(u.getAvatar());
         vo.setRole(u.getRole());

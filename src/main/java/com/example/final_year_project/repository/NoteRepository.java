@@ -15,10 +15,20 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
 
     Page<Note> findByUserId(Long userId, Pageable pageable);
 
+    @Query("SELECT n FROM Note n WHERE n.status = 'APPROVED' AND n.userId = :userId")
+    Page<Note> findApprovedByUserId(@Param("userId") Long userId, Pageable pageable);
+
     Page<Note> findByStatus(NoteStatus status, Pageable pageable);
 
     @Query("SELECT n FROM Note n WHERE n.status = :status AND (n.title LIKE %:keyword% OR n.content LIKE %:keyword%)")
     Page<Note> searchByKeywordAndStatus(@Param("keyword") String keyword, @Param("status") NoteStatus status, Pageable pageable);
+
+    /**
+     * 更偏工程可用的搜索：避免对大字段 content 做全量 LIKE 扫描。
+     * 只在 title 或 content 前缀区域中查找关键词，以提升在大数据集下的响应速度。
+     */
+    @Query("SELECT n FROM Note n WHERE n.status = :status AND (n.title LIKE %:keyword% OR SUBSTRING(n.content, 1, 500) LIKE %:keyword%)")
+    Page<Note> searchByKeywordAndStatusFast(@Param("keyword") String keyword, @Param("status") NoteStatus status, Pageable pageable);
 
     long countByUserId(Long userId);
 

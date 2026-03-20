@@ -41,6 +41,8 @@ public class SecurityConfig {
                                 "/api/notes/list", "/api/notes/search",
                                 "/api/notes/trending", "/api/notes/tags/hot").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/recommend/list").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/user/search").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/user/public/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/notes/*/view").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/uploads/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()

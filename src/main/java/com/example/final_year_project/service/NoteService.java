@@ -38,6 +38,8 @@ public class NoteService {
 
     // 热度衰减指数，值越大衰减越快，目前 1.5 效果还行
     private static final double DECAY_FACTOR = 1.5;
+    // 列表场景返回摘要，避免把大字段 content 全量下发导致慢查询与大响应体
+    private static final int SUMMARY_LEN = 200;
 
     @Transactional
     public NoteVO create(Long userId, NoteCreateRequest req) {
@@ -115,12 +117,23 @@ public class NoteService {
         return Result.PageData.of(toBatchVO(p.getContent(), userId), p.getTotalElements(), page, size);
     }
 
+    /**
+     * 查询某用户已通过笔记列表，用于公开个人页。
+     * viewerId 用于计算当前查看者的 like/favorite 状态（可选）。
+     */
+    public Result.PageData<NoteVO> listApprovedByAuthor(Long authorId, Long viewerId, int page, int size) {
+        Pageable pg = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Note> p = noteRepository.findApprovedByUserId(authorId, pg);
+        return Result.PageData.of(toBatchVO(p.getContent(), viewerId), p.getTotalElements(), page, size);
+    }
+
     public Result.PageData<NoteVO> search(String keyword, int page, int size) {
         if (keyword == null || keyword.isBlank()) {
             return listApproved(page, size);
         }
         Pageable pg = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Note> p = noteRepository.searchByKeywordAndStatus(keyword.trim(), NoteStatus.APPROVED, pg);
+        // 优化搜索：避免对大字段 content 做全量 LIKE 扫描，显著降低慢查询概率
+        Page<Note> p = noteRepository.searchByKeywordAndStatusFast(keyword.trim(), NoteStatus.APPROVED, pg);
         return Result.PageData.of(toBatchVO(p.getContent(), null), p.getTotalElements(), page, size);
     }
 
@@ -216,7 +229,12 @@ public class NoteService {
             vo.setId(n.getId());
             vo.setUserId(n.getUserId());
             vo.setTitle(n.getTitle());
-            vo.setContent(n.getContent());
+            // 列表/搜索/推荐卡片只返回摘要，详情页使用 toVOSingle 返回全文
+            String content = n.getContent();
+            if (content != null && content.length() > SUMMARY_LEN) {
+                content = content.substring(0, SUMMARY_LEN) + "...";
+            }
+            vo.setContent(content);
             vo.setCoverImage(n.getCoverImage());
             vo.setStatus(n.getStatus());
             vo.setRejectReason(n.getRejectReason());

@@ -17,6 +17,24 @@
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
+
+        <!-- Username search suggestions (appears after pressing Enter) -->
+        <div v-if="showUserDropdown && userSuggestions.length" class="user-suggest">
+          <div class="user-suggest-title">Users</div>
+          <button
+            v-for="u in userSuggestions"
+            :key="u.id"
+            class="user-suggest-item"
+            type="button"
+            @click="goUserProfile(u.id)"
+          >
+            <span class="user-suggest-avatar">{{ String(u.nickname || u.username).slice(0, 1).toUpperCase() }}</span>
+            <span class="user-suggest-name">
+              {{ u.nickname || u.username }}
+              <span class="user-suggest-username">@{{ u.username }}</span>
+            </span>
+          </button>
+        </div>
       </div>
       <div class="top-actions">
         <button class="theme-toggle" @click="toggleTheme" :title="isDark ? 'Switch to light mode' : 'Switch to dark mode'">
@@ -104,10 +122,11 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useTheme } from '@/composables/useTheme'
+import { searchUsers } from '@/api/user'
 import { Search, ArrowDown, Compass, Plus, Document, Star, Setting, MoreFilled, TrendCharts, ChatDotRound, Sunny, Moon } from '@element-plus/icons-vue'
 import BackToTop from '@/components/BackToTop.vue'
 import NotificationBell from '@/components/NotificationBell.vue'
@@ -119,14 +138,49 @@ const router = useRouter()
 const userStore = useUserStore()
 const keyword = ref(route.query.keyword || '')
 
+const showUserDropdown = ref(false)
+const userSuggestions = ref([])
+
+async function loadUserSuggestions(kw) {
+  try {
+    const res = await searchUsers({ keyword: kw, limit: 5 })
+    userSuggestions.value = res || []
+  } catch {
+    userSuggestions.value = []
+  }
+}
+
+function goUserProfile(userId) {
+  showUserDropdown.value = false
+  userSuggestions.value = []
+  router.push(`/user/${userId}`)
+}
+
 watch(() => route.query.keyword, (v) => {
   keyword.value = v || ''
 })
 
-function goSearch() {
-  if (keyword.value.trim()) {
-    router.push({ path: '/', query: { keyword: keyword.value } })
+watch(keyword, (v) => {
+  if (!v || !v.trim()) {
+    showUserDropdown.value = false
+    userSuggestions.value = []
   }
+})
+
+function goSearch() {
+  const kw = keyword.value.trim()
+  if (!kw) {
+    showUserDropdown.value = false
+    userSuggestions.value = []
+    return
+  }
+
+  // 1) Note search keyword for Home page
+  router.push({ path: '/', query: { keyword: kw } })
+
+  // 2) Username search suggestions dropdown
+  loadUserSuggestions(kw)
+  showUserDropdown.value = true
 }
 
 function handleCommand(cmd) {
@@ -136,6 +190,21 @@ function handleCommand(cmd) {
     router.push('/login')
   }
 }
+
+function onDocumentClick(e) {
+  const target = e.target
+  if (!target) return
+  const el = target.closest('.top-search')
+  if (!el) showUserDropdown.value = false
+}
+
+onMounted(() => {
+  document.addEventListener('click', onDocumentClick)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocumentClick)
+})
 </script>
 
 <style scoped>
@@ -187,6 +256,70 @@ function handleCommand(cmd) {
   flex: 1;
   max-width: 400px;
   margin: 0 auto;
+  position: relative;
+}
+
+.user-suggest {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--color-shadow-lg);
+  z-index: 50;
+  padding: 10px 8px;
+}
+
+.user-suggest-title {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 6px;
+  padding: 0 6px;
+}
+
+.user-suggest-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.user-suggest-item:hover {
+  background: var(--color-primary-muted);
+}
+
+.user-suggest-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary);
+  color: #fff;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.user-suggest-name {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  overflow: hidden;
+}
+
+.user-suggest-username {
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
 }
 
 .top-search-input {
