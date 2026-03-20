@@ -5,90 +5,142 @@
       <p class="home-head-sub">Recommendations for you, or browse the latest from the community.</p>
     </section>
 
-    <div class="category-bar">
-      <button
-        v-for="tab in tabs"
-        :key="tab.name"
-        type="button"
-        class="category-tab"
-        :class="{ active: activeTab === tab.name }"
-        @click="activeTab = tab.name"
-      >
-        {{ tab.label }}
-      </button>
-    </div>
+    <!-- Search results area (not inside Latest tab) -->
+    <div v-if="keyword" class="search-panel">
+      <div class="search-title">
+        Search results for <span class="search-keyword">"{{ keyword }}"</span>
+      </div>
 
-    <div v-if="recommendLoading || latestLoading" class="masonry">
-      <NoteCardSkeleton v-for="i in 9" :key="i" class="masonry-item animate-in" :class="`stagger-${(i % 6) + 1}`" />
+      <div v-if="searchLoading" class="masonry">
+        <NoteCardSkeleton v-for="i in 9" :key="i" class="masonry-item animate-in" :class="`stagger-${(i % 6) + 1}`" />
+      </div>
+
+      <template v-else>
+        <div class="masonry">
+          <article
+            v-for="(n, i) in searchList"
+            :key="n.id"
+            class="note-card masonry-item animate-in"
+            :class="`stagger-${(i % 6) + 1}`"
+            @click="goNote(n.id)"
+          >
+            <div class="note-card-cover" :style="coverStyle(n)"></div>
+            <div class="note-card-body">
+              <h3 class="note-card-title">{{ n.title }}</h3>
+              <p class="note-card-excerpt">{{ excerpt(n.content) }}</p>
+              <div class="note-card-footer">
+                <span class="note-card-author">{{ n.authorName || 'Anonymous' }}</span>
+                <span class="note-card-meta"><el-icon><View /></el-icon> {{ formatCount(n.viewCount) }}</span>
+              </div>
+            </div>
+          </article>
+
+          <EmptyState
+            v-if="searchList.length === 0"
+            class="masonry-item masonry-full"
+            title="No matches"
+            description="Try a different keyword."
+          />
+        </div>
+
+        <div v-if="searchTotal > 12" class="pagination-wrap">
+          <el-pagination
+            v-model:current-page="searchPage"
+            :page-size="12"
+            :total="searchTotal"
+            layout="prev, pager, next"
+            @current-change="loadSearch"
+          />
+        </div>
+      </template>
     </div>
 
     <template v-else>
-      <div v-if="activeTab === 'recommend'" class="masonry">
-        <article
-          v-for="(n, i) in recommendList"
-          :key="n.noteId"
-          class="note-card masonry-item animate-in"
-          :class="`stagger-${(i % 6) + 1}`"
-          @click="goNote(n.noteId)"
+      <div class="category-bar">
+        <button
+          v-for="tab in tabs"
+          :key="tab.name"
+          type="button"
+          class="category-tab"
+          :class="{ active: activeTab === tab.name }"
+          @click="activeTab = tab.name"
         >
-          <div class="note-card-cover" :style="coverStyle(n)"></div>
-          <div class="note-card-body">
-            <div v-if="n.recallSource && n.recallSource !== 'default'" class="recommend-badges">
-              <span class="recommend-tag" :class="n.recallSource">
-                {{ n.recallSource === 'vector' ? 'Guess You Like' : (n.recallSource === 'popular' ? 'Trending' : 'Recommend') }}
-              </span>
-            </div>
-            <h3 class="note-card-title">{{ n.title }}</h3>
-            <p v-if="n.content" class="note-card-excerpt">{{ excerpt(n.content) }}</p>
-            <div class="note-card-footer">
-              <span class="note-card-author">{{ n.authorName || 'Anonymous' }}</span>
-              <span class="note-card-meta"><el-icon><View /></el-icon> {{ formatCount(n.viewCount) }}</span>
-            </div>
-          </div>
-        </article>
-        <EmptyState
-          v-if="recommendList.length === 0"
-          class="masonry-item masonry-full"
-          title="No recommendations yet"
-          description="Start reading and liking notes to get personalized picks."
-        />
+          {{ tab.label }}
+        </button>
       </div>
 
-      <div v-else class="masonry">
-        <article
-          v-for="(n, i) in latestList"
-          :key="n.id"
-          class="note-card masonry-item animate-in"
-          :class="`stagger-${(i % 6) + 1}`"
-          @click="goNote(n.id)"
-        >
-          <div class="note-card-cover" :style="coverStyle(n)"></div>
-          <div class="note-card-body">
-            <h3 class="note-card-title">{{ n.title }}</h3>
-            <p class="note-card-excerpt">{{ excerpt(n.content) }}</p>
-            <div class="note-card-footer">
-              <span class="note-card-author">{{ n.authorName || 'Anonymous' }}</span>
-              <span class="note-card-meta"><el-icon><View /></el-icon> {{ formatCount(n.viewCount) }}</span>
-            </div>
-          </div>
-        </article>
-        <EmptyState
-          v-if="latestList.length === 0"
-          class="masonry-item masonry-full"
-          :title="keyword ? 'No matches' : 'No notes yet'"
-          :description="keyword ? 'Try a different keyword.' : 'Be the first to publish one.'"
-        />
+      <div v-if="currentLoading" class="masonry">
+        <NoteCardSkeleton v-for="i in 9" :key="i" class="masonry-item animate-in" :class="`stagger-${(i % 6) + 1}`" />
       </div>
 
-      <div v-if="activeTab === 'latest' && latestTotal > 12" class="pagination-wrap">
-        <el-pagination
-          v-model:current-page="latestPage"
-          :page-size="12"
-          :total="latestTotal"
-          layout="prev, pager, next"
-          @current-change="loadLatest"
-        />
-      </div>
+      <template v-else>
+        <div v-if="activeTab === 'recommend'" class="masonry">
+          <article
+            v-for="(n, i) in recommendList"
+            :key="n.noteId"
+            class="note-card masonry-item animate-in"
+            :class="`stagger-${(i % 6) + 1}`"
+            @click="goNote(n.noteId)"
+          >
+            <div class="note-card-cover" :style="coverStyle(n)"></div>
+            <div class="note-card-body">
+              <div v-if="n.recallSource && n.recallSource !== 'default'" class="recommend-badges">
+                <span class="recommend-tag" :class="n.recallSource">
+                  {{ n.recallSource === 'vector' ? 'Guess You Like' : (n.recallSource === 'popular' ? 'Trending' : 'Recommend') }}
+                </span>
+              </div>
+              <h3 class="note-card-title">{{ n.title }}</h3>
+              <p v-if="n.content" class="note-card-excerpt">{{ excerpt(n.content) }}</p>
+              <div class="note-card-footer">
+                <span class="note-card-author">{{ n.authorName || 'Anonymous' }}</span>
+                <span class="note-card-meta"><el-icon><View /></el-icon> {{ formatCount(n.viewCount) }}</span>
+              </div>
+            </div>
+          </article>
+          <EmptyState
+            v-if="recommendList.length === 0"
+            class="masonry-item masonry-full"
+            title="No recommendations yet"
+            description="Start reading and liking notes to get personalized picks."
+          />
+        </div>
+
+        <div v-else class="masonry">
+          <article
+            v-for="(n, i) in latestList"
+            :key="n.id"
+            class="note-card masonry-item animate-in"
+            :class="`stagger-${(i % 6) + 1}`"
+            @click="goNote(n.id)"
+          >
+            <div class="note-card-cover" :style="coverStyle(n)"></div>
+            <div class="note-card-body">
+              <h3 class="note-card-title">{{ n.title }}</h3>
+              <p class="note-card-excerpt">{{ excerpt(n.content) }}</p>
+              <div class="note-card-footer">
+                <span class="note-card-author">{{ n.authorName || 'Anonymous' }}</span>
+                <span class="note-card-meta"><el-icon><View /></el-icon> {{ formatCount(n.viewCount) }}</span>
+              </div>
+            </div>
+          </article>
+          <EmptyState
+            v-if="latestList.length === 0"
+            class="masonry-item masonry-full"
+            title="No notes yet"
+            description="Be the first to publish one."
+          />
+        </div>
+
+        <div v-if="activeTab === 'latest' && latestTotal > 12" class="pagination-wrap">
+          <el-pagination
+            v-model:current-page="latestPage"
+            :page-size="12"
+            :total="latestTotal"
+            layout="prev, pager, next"
+            @current-change="loadLatest"
+          />
+        </div>
+      </template>
     </template>
 
     <div v-if="userStore.isLogin" class="fab-wrap">
@@ -129,6 +181,13 @@ const latestPage = ref(1)
 const latestTotal = ref(0)
 
 const keyword = computed(() => route.query.keyword || '')
+const currentLoading = computed(() => activeTab.value === 'recommend' ? recommendLoading.value : latestLoading.value)
+
+// Search results for keyword (shown in a dedicated area, not under Latest tab)
+const searchList = ref([])
+const searchLoading = ref(false)
+const searchPage = ref(1)
+const searchTotal = ref(0)
 
 // 截取摘要文本
 function excerpt(text) {
@@ -179,16 +238,30 @@ async function loadLatest() {
   latestLoading.value = true
   try {
     const pageIdx = latestPage.value - 1
-    let res
-    if (keyword.value) {
-      res = await searchNotes({ page: pageIdx, size: 12, keyword: keyword.value })
-    } else {
-      res = await listNotes({ page: pageIdx, size: 12 })
-    }
+    // keyword search results are handled by a dedicated search panel above
+    const res = await listNotes({ page: pageIdx, size: 12 })
     latestList.value = res.list || []
     latestTotal.value = res.total || 0
   } finally {
     latestLoading.value = false
+  }
+}
+
+async function loadSearch() {
+  searchLoading.value = true
+  try {
+    const pageIdx = searchPage.value - 1
+    const kw = keyword.value.trim()
+    if (!kw) {
+      searchList.value = []
+      searchTotal.value = 0
+      return
+    }
+    const res = await searchNotes({ page: pageIdx, size: 12, keyword: kw })
+    searchList.value = res.list || []
+    searchTotal.value = res.total || 0
+  } finally {
+    searchLoading.value = false
   }
 }
 
@@ -197,20 +270,26 @@ function goNote(id) {
 }
 
 watch(activeTab, (tab) => {
+  // Only load tab content when keyword search panel is not active
+  if (keyword.value) return
   if (tab === 'recommend') loadRecommend()
   else loadLatest()
 })
 
 watch(() => route.query.keyword, () => {
-  latestPage.value = 1
-  if (activeTab.value === 'latest') loadLatest()
+  searchPage.value = 1
+  if (keyword.value) {
+    loadSearch()
+  }
 })
 
 onMounted(() => {
-  loadRecommend()
-  // 如果 URL 带了搜索关键词就自动切到 Latest 标签
-  if (keyword.value) activeTab.value = 'latest'
-  loadLatest()
+  if (keyword.value) {
+    loadSearch()
+  } else {
+    // 默认进入 For you：加载推荐列表即可（Latest 在切换时加载）
+    loadRecommend()
+  }
 })
 </script>
 
@@ -244,6 +323,21 @@ onMounted(() => {
   border-bottom: 1px solid var(--color-border);
   overflow-x: auto;
   scrollbar-width: none;
+}
+
+.search-panel {
+  margin-bottom: 24px;
+}
+
+.search-title {
+  margin-bottom: 16px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.search-keyword {
+  color: var(--color-primary);
 }
 
 .category-bar::-webkit-scrollbar {
